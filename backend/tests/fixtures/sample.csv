@@ -1,0 +1,6 @@
+﻿Car,Date,Mileage,Gallons,Cost,Gas Station,Zip code,Missed Last Fill,MPF,MPG
+TestCar,05/10/2019,334,11.571,29.61,,#N/A,1,#N/A,#N/A
+TestCar,05/20/2019,627,11.168,28.58,Kroger,77077.0,0,293,25.32
+TestCar,06/01/2019,906,12.064,28.46,Kroger,7007,0,279,24.98
+TestCar,06/11/2019,1204,11.862,30.00,,#N/A,0,298,24.70
+TestCar,06/21/2019,1500,10.0,28.00,Shell,77007,1,#N/A,#N/A
