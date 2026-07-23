@@ -1,4 +1,19 @@
 venv
+.venv/
 .env*
 private.json
 token.json
+*.csv
+!backend/tests/fixtures/*.csv
+# Personal fuel/location data — the DB (data/) is the source of truth; the xlsx
+# and CSV snapshots are on-disk backups, deliberately kept out of git.
+*.xlsx
+data/
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+frontend/dist/
+__pycache__/
+.pytest_cache/
+dev-dist/

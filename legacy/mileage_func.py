@@ -67,3 +67,6 @@ def push_data(data_list):
     cursor.commit()
     cnxn.close()
 
+    df = pd.read_csv('mileageTracker.csv')
+    df = pd.concat([df,pd.DataFrame([data_list],columns=c.LIST_READ_COL)],axis=0,ignore_index=True)
+    pd.to_csv('mileageTracker.csv')
