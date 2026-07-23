@@ -1,0 +1,526 @@
+/* ---------- layout shell ---------- */
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  /* leave room for the fixed bottom tab bar */
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  letter-spacing: -0.2px;
+}
+
+.app-main {
+  flex: 1;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.status-msg {
+  margin: 32px 8px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.error-msg {
+  color: var(--danger);
+}
+
+.section-title {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+/* ---------- bottom tab bar ---------- */
+
+.tab-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 20;
+}
+
+.tab {
+  flex: 1;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab.active {
+  color: var(--accent);
+}
+
+.tab-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ---------- vehicle picker ---------- */
+
+.vehicle-picker {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  max-width: 55%;
+}
+
+/* ---------- quick log form ---------- */
+
+.log-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.field input[type='text'],
+.field input[type='date'] {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 14px;
+  font-size: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.field input::placeholder {
+  color: var(--text-muted);
+}
+
+.field-hint {
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.preview-line {
+  min-height: 24px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--good);
+  text-align: center;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.chip:active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.chip-zip {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chip:active .chip-zip {
+  color: var(--accent-ink);
+}
+
+.date-toggle {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.date-change {
+  color: var(--accent);
+  text-decoration: underline;
+  margin-left: 4px;
+}
+
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.check-field input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.inline-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.submit-btn {
+  min-height: 54px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  background: var(--text);
+  color: var(--page);
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  z-index: 30;
+  white-space: nowrap;
+}
+
+/* Longer confirmations (MT-23 edit/delete knock-on MPG) must wrap, not scroll. */
+.toast-multiline {
+  white-space: normal;
+  max-width: min(92vw, 440px);
+  text-align: center;
+  line-height: 1.35;
+}
+
+/* ---------- history ---------- */
+
+.fillup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fillup-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fillup-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.fillup-date {
+  font-weight: 600;
+}
+
+.fillup-mpg {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.fillup-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fillup-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.missed-badge,
+.estimated-badge {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ---------- pending (no-odometer) fills, MT-24 ---------- */
+
+.fillup-card.pending {
+  border-left: 3px solid var(--accent);
+}
+
+.pending-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: normal;
+}
+
+.pending-estimate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.pending-suggest {
+  font-variant-numeric: tabular-nums;
+}
+
+.pending-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.accept-btn {
+  min-height: 36px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fillup-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.fillup-actions button {
+  min-height: 40px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.fillup-actions button.danger {
+  color: var(--danger);
+}
+
+.load-more {
+  margin-top: 12px;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* ---------- edit dialog ---------- */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 40;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 480px;
+  max-height: 88svh;
+  overflow-y: auto;
+  background: var(--page);
+  border-radius: 16px 16px 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialog-title {
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.dialog-actions button {
+  flex: 1;
+  min-height: 50px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.dialog-actions .submit-btn {
+  border: none;
+}
+
+/* ---------- charts ---------- */
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.chart-placeholder {
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.chart-tip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tip-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* short line key in the series color — identity without coloring the text */
+.tip-key {
+  width: 14px;
+  height: 0;
+  border-top: 2px solid var(--series);
+  border-radius: 1px;
+}
+
+.tip-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tip-sub {
+  color: var(--text-muted);
+  padding-left: 22px;
+}
