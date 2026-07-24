@@ -6,6 +6,7 @@ import type {
   FillupUpdate,
   MonthCost,
   MpgPoint,
+  SummaryStats,
   VehicleOut,
 } from './types'
 
@@ -121,4 +122,8 @@ export function getMpgStats(vehicleId: number): Promise<MpgPoint[]> {
 
 export function getCostByMonth(vehicleId: number): Promise<MonthCost[]> {
   return request('GET', `/api/stats/cost-by-month?vehicle_id=${vehicleId}`)
+}
+
+export function getSummary(vehicleId: number): Promise<SummaryStats> {
+  return request('GET', `/api/stats/summary?vehicle_id=${vehicleId}`)
 }

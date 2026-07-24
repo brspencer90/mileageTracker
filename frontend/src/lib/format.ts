@@ -38,6 +38,13 @@ export function formatTsTick(ms: number): string {
   return `${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`
 }
 
+/** "2019-05-20" -> "May 2019" for the header "tracked since" line. */
+export function formatMonthYear(iso: string): string {
+  const [y, m] = iso.split('-').map(Number)
+  if (!y || !m) return iso
+  return `${MONTHS[m - 1]} ${y}`
+}
+
 /** "2024-03" -> "Mar '24". */
 export function formatMonth(month: string): string {
   const [y, m] = month.split('-').map(Number)

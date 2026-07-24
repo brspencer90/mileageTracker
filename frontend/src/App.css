@@ -15,12 +15,82 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px;
+  padding: 18px 16px 2px;
 }
 
-.app-header h1 {
-  font-size: 20px;
-  letter-spacing: -0.2px;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  flex: none;
+  background: linear-gradient(
+    150deg,
+    var(--accent),
+    color-mix(in oklab, var(--accent) 62%, #7b3ff2)
+  );
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow);
+}
+
+.brand-mark svg {
+  width: 21px;
+  height: 21px;
+}
+
+.brand-id {
+  min-width: 0;
+}
+
+.brand-id h1 {
+  font-size: 1.06rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.odo {
+  text-align: right;
+  flex: none;
+}
+
+.odo-n {
+  font-size: 1.12rem;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+
+.odo-l {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.vehicle-picker-row {
+  padding: 8px 16px 0;
 }
 
 .app-main {
@@ -523,4 +593,246 @@
 .tip-sub {
   color: var(--text-muted);
   padding-left: 22px;
+}
+
+/* ---------- shared card ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- KPI summary tiles ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.tile {
+  padding: 13px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.tile.hero {
+  grid-column: 1 / -1;
+}
+
+.tile-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tile-label {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tile-val {
+  font-size: 1.75rem;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.tile.hero .tile-val {
+  font-size: 2.5rem;
+}
+
+.tile-val .unit {
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: var(--ink-2);
+  margin-left: 3px;
+  letter-spacing: 0;
+}
+
+.tile-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.74rem;
+  font-weight: 620;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.delta.down {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.delta.up {
+  color: var(--good);
+  background: var(--good-soft);
+}
+
+.delta svg {
+  width: 11px;
+  height: 11px;
+}
+
+.spark {
+  width: 100%;
+  height: 34px;
+  display: block;
+  overflow: visible;
+}
+
+/* ---------- health banner ---------- */
+
+.health {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.76rem;
+  color: var(--ink-2);
+  background: var(--warn-soft);
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+
+.health-ic {
+  color: var(--warn);
+  flex: none;
+  display: grid;
+}
+
+.health b {
+  color: var(--ink);
+  font-weight: 640;
+}
+
+/* ---------- chart head + legend ---------- */
+
+.chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chart-head .section-title {
+  margin-bottom: 8px;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 2px 2px;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--ink-2);
+}
+
+.lg-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+
+.lg-line {
+  width: 15px;
+  height: 0;
+  border-top: 2px solid var(--accent);
+}
+
+.lg-ref {
+  width: 15px;
+  height: 0;
+  border-top: 2px dashed var(--muted);
+}
+
+/* ---------- history fill-row scent ---------- */
+
+.fillup-mpg-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.vs-avg {
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.vs-avg.up {
+  color: var(--good);
+}
+
+.vs-avg.down {
+  color: var(--warn);
+}
+
+.vs-avg.flat {
+  color: var(--muted);
+}
+
+.range-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.range-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ---------- log form grouping ---------- */
+
+.primary-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 14px;
+}
+
+.details-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--hairline);
+}
+
+.details-label {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  font-weight: 600;
+  margin-top: 8px;
 }

@@ -1,22 +1,37 @@
 import { useEffect, useState } from 'react'
-import { getVehicles } from './api/client'
-import type { VehicleOut } from './api/types'
+import { getSummary, getVehicles } from './api/client'
+import type { SummaryStats, VehicleOut } from './api/types'
+import { formatMonthYear } from './lib/format'
 import VehiclePicker from './components/VehiclePicker'
 import QuickLogForm from './components/QuickLogForm'
 import HistoryTable from './components/HistoryTable'
 import MpgChart from './components/MpgChart'
 import CostChart from './components/CostChart'
+import SummaryTiles from './components/SummaryTiles'
 import './App.css'
 
 type Tab = 'log' | 'history'
+
+/** "2019 VW GTI" from whichever of year/make/model are present, else null. */
+function vehicleDesc(v: VehicleOut): string | null {
+  const parts = [
+    v.year !== null ? String(v.year) : null,
+    v.make,
+    v.model,
+  ].filter((p): p is string => p !== null && p !== '')
+  return parts.length > 0 ? parts.join(' ') : null
+}
 
 function App() {
   const [vehicles, setVehicles] = useState<VehicleOut[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('log')
-  // Bumped after any create/edit/delete so history + charts refetch.
+  // Bumped after any create/edit/delete so history + charts + summary refetch.
   const [dataVersion, setDataVersion] = useState(0)
+  // Shared summary — powers the header odometer, SummaryTiles, and the
+  // HistoryTable "vs avg" baseline. Null while loading or on error.
+  const [summary, setSummary] = useState<SummaryStats | null>(null)
 
   useEffect(() => {
     getVehicles()
@@ -31,7 +46,40 @@ function App() {
       })
   }, [])
 
+  useEffect(() => {
+    if (selectedVehicleId === null) {
+      setSummary(null)
+      return
+    }
+    let cancelled = false
+    getSummary(selectedVehicleId)
+      .then((s) => {
+        if (!cancelled) setSummary(s)
+      })
+      .catch(() => {
+        // Summary is progressive enhancement — never blocks the core UI.
+        if (!cancelled) setSummary(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedVehicleId, dataVersion])
+
   const bumpVersion = () => setDataVersion((v) => v + 1)
+
+  const selectedVehicle =
+    vehicles?.find((v) => v.id === selectedVehicleId) ?? null
+
+  const subtitle = (() => {
+    if (selectedVehicle === null) return null
+    const parts = [
+      vehicleDesc(selectedVehicle),
+      summary?.tracked_since != null
+        ? `tracked since ${formatMonthYear(summary.tracked_since)}`
+        : null,
+    ].filter((p): p is string => p !== null)
+    return parts.length > 0 ? parts.join(' · ') : null
+  })()
 
   let content
   if (loadError !== null) {
@@ -55,9 +103,18 @@ function App() {
   } else {
     content = (
       <>
+        <SummaryTiles
+          vehicleId={selectedVehicleId}
+          summary={summary}
+          version={dataVersion}
+        />
         <MpgChart vehicleId={selectedVehicleId} version={dataVersion} />
         <CostChart vehicleId={selectedVehicleId} version={dataVersion} />
-        <HistoryTable vehicleId={selectedVehicleId} onChanged={bumpVersion} />
+        <HistoryTable
+          vehicleId={selectedVehicleId}
+          onChanged={bumpVersion}
+          lifetimeMpg={summary?.lifetime_mpg ?? null}
+        />
       </>
     )
   }
@@ -65,15 +122,37 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Mileage Tracker</h1>
-        {vehicles !== null && (
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16" />
+              <path d="M3 21h14" />
+              <path d="M15 9h2.5a1.5 1.5 0 0 1 1.5 1.5V16a2 2 0 0 0 2 2v0a2 2 0 0 0 2-2v-6l-3-3" />
+              <path d="M7 8h6" />
+            </svg>
+          </span>
+          <div className="brand-id">
+            <h1>{selectedVehicle?.name ?? 'Mileage Tracker'}</h1>
+            {subtitle !== null && <div className="brand-sub">{subtitle}</div>}
+          </div>
+        </div>
+        <div className="odo">
+          <div className="odo-n tnum">
+            {summary?.odometer != null ? summary.odometer.toLocaleString() : '—'}
+          </div>
+          <div className="odo-l">miles</div>
+        </div>
+      </header>
+
+      {vehicles !== null && vehicles.length > 1 && (
+        <div className="vehicle-picker-row">
           <VehiclePicker
             vehicles={vehicles}
             selectedId={selectedVehicleId}
             onSelect={setSelectedVehicleId}
           />
-        )}
-      </header>
+        </div>
+      )}
 
       <main className="app-main">{content}</main>
 

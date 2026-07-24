@@ -176,142 +176,64 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
         </p>
       )}
 
-      {!noOdometer && (
-        <label className="field">
-          <span className="field-label">Mileage</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            autoFocus
-            enterKeyHint="next"
-            placeholder={
-              prevMileage !== null
-                ? `Last: ${prevMileage.toLocaleString()}`
-                : 'Odometer'
-            }
-            value={mileage}
-            onChange={(e) => setMileage(e.target.value)}
-          />
-          {mileageHint !== null && (
-            <span className="field-hint">{mileageHint}</span>
-          )}
-        </label>
-      )}
-
-      <label className="check-field">
-        <input
-          type="checkbox"
-          checked={noOdometer}
-          onChange={(e) => setNoOdometer(e.target.checked)}
-        />
-        <span>I don't have an odometer reading</span>
-      </label>
-
-      <label className="field">
-        <span className="field-label">Gallons</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          enterKeyHint="next"
-          placeholder="0.000"
-          value={gallons}
-          onChange={(e) => setGallons(e.target.value)}
-        />
-        {gallonsHint !== null && <span className="field-hint">{gallonsHint}</span>}
-      </label>
-
-      <label className="field">
-        <span className="field-label">Total cost</span>
-        <input
-          type="text"
-          inputMode="decimal"
-          enterKeyHint="done"
-          placeholder="$0.00"
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-        />
-        {costHint !== null && <span className="field-hint">{costHint}</span>}
-      </label>
-
-      <div className="preview-line" aria-live="polite">
-        {preview ?? ' '}
-      </div>
-
-      <label className="field">
-        <span className="field-label">Station</span>
-        <input
-          type="text"
-          value={station}
-          placeholder="Station name"
-          onChange={(e) => setStation(e.target.value)}
-        />
-      </label>
-
-      <label className="field">
-        <span className="field-label">ZIP</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={5}
-          placeholder="ZIP code"
-          value={zip}
-          onChange={(e) => setZip(e.target.value)}
-        />
-        {zipHint !== null && <span className="field-hint">{zipHint}</span>}
-      </label>
-
-      {quickPicks.length > 0 && (
-        <div className="chip-row" role="group" aria-label="Recent stations">
-          {quickPicks.map((p) => (
-            <button
-              key={`${p.station}|${p.zip ?? ''}`}
-              type="button"
-              className="chip"
-              onClick={() => {
-                setStation(p.station)
-                setZip(p.zip ?? '')
-              }}
-            >
-              {p.station}
-              {p.zip !== null && <span className="chip-zip">{p.zip}</span>}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="field">
-        {!dateOpen ? (
-          <button
-            type="button"
-            className="date-toggle"
-            onClick={() => setDateOpen(true)}
-          >
-            Date: {formatDate(date)} <span className="date-change">change</span>
-          </button>
-        ) : (
+      {/* Primary group: the three numbers that define a fill-up, grouped and
+          prominent so the common case is a top-of-screen, no-scroll entry. */}
+      <div className="primary-group card">
+        {!noOdometer && (
           <label className="field">
-            <span className="field-label">Date</span>
+            <span className="field-label">Mileage</span>
             <input
-              type="date"
-              value={date}
-              max={todayISO()}
-              onChange={(e) => setDate(e.target.value)}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoFocus
+              enterKeyHint="next"
+              placeholder={
+                prevMileage !== null
+                  ? `Last: ${prevMileage.toLocaleString()}`
+                  : 'Odometer'
+              }
+              value={mileage}
+              onChange={(e) => setMileage(e.target.value)}
             />
-            {dateHint !== null && <span className="field-hint">{dateHint}</span>}
+            {mileageHint !== null && (
+              <span className="field-hint">{mileageHint}</span>
+            )}
           </label>
         )}
+
+        <label className="field">
+          <span className="field-label">Gallons</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            enterKeyHint="next"
+            placeholder="0.000"
+            value={gallons}
+            onChange={(e) => setGallons(e.target.value)}
+          />
+          {gallonsHint !== null && (
+            <span className="field-hint">{gallonsHint}</span>
+          )}
+        </label>
+
+        <label className="field">
+          <span className="field-label">Total cost</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            enterKeyHint="done"
+            placeholder="$0.00"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+          />
+          {costHint !== null && <span className="field-hint">{costHint}</span>}
+        </label>
       </div>
 
-      <label className="check-field">
-        <input
-          type="checkbox"
-          checked={missedLastFill}
-          onChange={(e) => setMissedLastFill(e.target.checked)}
-        />
-        <span>I missed logging my last fill-up</span>
-      </label>
+      <div className="preview-line" aria-live="polite">
+        {preview ?? ' '}
+      </div>
 
       {serverError !== null && (
         <p className="inline-error" role="alert">
@@ -322,6 +244,100 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
       <button type="submit" className="submit-btn" disabled={!canSubmit}>
         {submitting ? 'Saving…' : 'Save fill-up'}
       </button>
+
+      {/* Secondary "details" — visually demoted, but present without extra
+          taps: the no-odometer flag, station + quick-picks, ZIP, date, and
+          the missed-fill flag. */}
+      <div className="details-group">
+        <span className="details-label">Details</span>
+
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={noOdometer}
+            onChange={(e) => setNoOdometer(e.target.checked)}
+          />
+          <span>I don&apos;t have an odometer reading</span>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Station</span>
+          <input
+            type="text"
+            value={station}
+            placeholder="Station name"
+            onChange={(e) => setStation(e.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span className="field-label">ZIP</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={5}
+            placeholder="ZIP code"
+            value={zip}
+            onChange={(e) => setZip(e.target.value)}
+          />
+          {zipHint !== null && <span className="field-hint">{zipHint}</span>}
+        </label>
+
+        {quickPicks.length > 0 && (
+          <div className="chip-row" role="group" aria-label="Recent stations">
+            {quickPicks.map((p) => (
+              <button
+                key={`${p.station}|${p.zip ?? ''}`}
+                type="button"
+                className="chip"
+                onClick={() => {
+                  setStation(p.station)
+                  setZip(p.zip ?? '')
+                }}
+              >
+                {p.station}
+                {p.zip !== null && <span className="chip-zip">{p.zip}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="field">
+          {!dateOpen ? (
+            <button
+              type="button"
+              className="date-toggle"
+              onClick={() => setDateOpen(true)}
+            >
+              Date: {formatDate(date)}{' '}
+              <span className="date-change">change</span>
+            </button>
+          ) : (
+            <label className="field">
+              <span className="field-label">Date</span>
+              <input
+                type="date"
+                value={date}
+                max={todayISO()}
+                onChange={(e) => setDate(e.target.value)}
+              />
+              {dateHint !== null && (
+                <span className="field-hint">{dateHint}</span>
+              )}
+            </label>
+          )}
+        </div>
+
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={missedLastFill}
+            onChange={(e) => setMissedLastFill(e.target.checked)}
+          />
+          <span>I missed logging my last fill-up</span>
+        </label>
+      </div>
 
       {toast !== null && (
         <div className="toast" role="status">

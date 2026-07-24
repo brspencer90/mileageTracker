@@ -16,7 +16,13 @@ const ZIP_RE = /^\d{5}$/
 interface Props {
   vehicleId: number
   onChanged: () => void
+  /** lifetime MPG baseline for the per-fill "vs avg" scent (MT dashboard). */
+  lifetimeMpg: number | null
 }
+
+// Range bar / clamp bounds shared with the MPG chart's real driving band.
+const BAR_MIN = 18
+const BAR_MAX = 40
 
 /** "a" · "a & b" · "a, b & c" */
 function joinLabels(labels: string[]): string {
@@ -53,7 +59,19 @@ function mpgText(f: FillupOut | undefined | null): string {
   return f != null && f.mpg !== null ? f.mpg.toFixed(1) : '—'
 }
 
-function HistoryTable({ vehicleId, onChanged }: Props) {
+/** "▲ 1.2 vs avg" / "▼ 0.8 vs avg" / "→ on avg" against lifetime MPG. */
+function VsAvg({ mpg, lifetime }: { mpg: number; lifetime: number }) {
+  const diff = mpg - lifetime
+  const cls = Math.abs(diff) < 0.6 ? 'flat' : diff > 0 ? 'up' : 'down'
+  const arrow = cls === 'flat' ? '→' : cls === 'up' ? '▲' : '▼'
+  return (
+    <span className={`vs-avg ${cls}`}>
+      {arrow} {cls === 'flat' ? 'on avg' : `${Math.abs(diff).toFixed(1)} vs avg`}
+    </span>
+  )
+}
+
+function HistoryTable({ vehicleId, onChanged, lifetimeMpg }: Props) {
   const [items, setItems] = useState<FillupOut[] | null>(null)
   const [total, setTotal] = useState(0)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -234,10 +252,15 @@ function HistoryTable({ vehicleId, onChanged }: Props) {
             >
               <div className="fillup-top">
                 <span className="fillup-date">{formatDate(f.date)}</span>
-                <span className="fillup-mpg">
-                  {f.mpg !== null
-                    ? `${f.mpg_estimated ? '~' : ''}${f.mpg.toFixed(1)} MPG`
-                    : '— MPG'}
+                <span className="fillup-mpg-group">
+                  <span className="fillup-mpg">
+                    {f.mpg !== null
+                      ? `${f.mpg_estimated ? '~' : ''}${f.mpg.toFixed(1)} MPG`
+                      : '— MPG'}
+                  </span>
+                  {f.mpg !== null && lifetimeMpg !== null && (
+                    <VsAvg mpg={f.mpg} lifetime={lifetimeMpg} />
+                  )}
                 </span>
               </div>
               <div className="fillup-stats">
@@ -252,6 +275,15 @@ function HistoryTable({ vehicleId, onChanged }: Props) {
                 <span>{f.gallons.toFixed(3)} gal</span>
                 <span>{formatMoney(f.cost)}</span>
               </div>
+              {f.mpg !== null && (
+                <div className="range-bar" aria-hidden="true">
+                  <i
+                    style={{
+                      width: `${Math.min(100, Math.max(6, ((Math.min(f.mpg, BAR_MAX) - BAR_MIN) / (BAR_MAX - BAR_MIN)) * 100))}%`,
+                    }}
+                  />
+                </div>
+              )}
               {(f.station !== null ||
                 f.missed_last_fill ||
                 f.mileage_estimated) && (

@@ -23,12 +23,16 @@ export function usePrefersDark(): boolean {
  * dark-surface steps, not an automatic flip.
  */
 export interface ChartTheme {
-  /** categorical slot 1 (single series) */
+  /** categorical slot 1 (single series) — the mockup accent */
   series: string
   surface: string
   grid: string
   baseline: string
   axisText: string
+  /** muted ink for reference-line + its label */
+  muted: string
+  /** faint per-fill dot-cloud fill */
+  dot: string
   textPrimary: string
   textSecondary: string
   /** ghost wash for bar hover cursor */
@@ -37,23 +41,27 @@ export interface ChartTheme {
 
 const LIGHT: ChartTheme = {
   series: '#2a78d6',
-  surface: '#fcfcfb',
-  grid: '#e1e0d9',
-  baseline: '#c3c2b7',
-  axisText: '#898781',
-  textPrimary: '#0b0b0b',
-  textSecondary: '#52514e',
-  hoverWash: 'rgba(11, 11, 11, 0.06)',
+  surface: '#ffffff',
+  grid: '#e4e7ec',
+  baseline: '#c6ccd4',
+  axisText: '#79818c',
+  muted: '#79818c',
+  dot: 'rgba(42, 120, 214, 0.28)',
+  textPrimary: '#10141a',
+  textSecondary: '#47505b',
+  hoverWash: 'rgba(15, 22, 34, 0.06)',
 }
 
 const DARK: ChartTheme = {
-  series: '#3987e5',
-  surface: '#1a1a19',
-  grid: '#2c2c2a',
-  baseline: '#383835',
-  axisText: '#898781',
-  textPrimary: '#ffffff',
-  textSecondary: '#c3c2b7',
+  series: '#3d8bf0',
+  surface: '#17191d',
+  grid: '#26292e',
+  baseline: '#3a3f46',
+  axisText: '#7c838d',
+  muted: '#7c838d',
+  dot: 'rgba(120, 170, 235, 0.3)',
+  textPrimary: '#f2f4f7',
+  textSecondary: '#b7bdc6',
   hoverWash: 'rgba(255, 255, 255, 0.08)',
 }
 

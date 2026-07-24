@@ -1,23 +1,50 @@
+/*
+ * Design tokens — adopted from the dashboard-redesign mockup (cool-biased
+ * neutrals, card style, accent, good/warn status). Primitive tokens are
+ * defined per theme; the *-alias tokens below reference them once and resolve
+ * lazily at each use site, so legacy component styles keep working unchanged.
+ *
+ * Three theme scopes per the mockup: :root (light default) + the dark media
+ * query (system preference) + explicit [data-theme] overrides that win over
+ * the media query in both directions (for a future in-app theme toggle).
+ */
 :root {
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --text: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.1);
-  --hairline: #e1e0d9;
+  /* mockup primitives */
+  --page: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --ink: #10141a;
+  --ink-2: #47505b;
+  --muted: #79818c;
+  --hairline: rgba(15, 22, 34, 0.1);
+  --hairline-strong: rgba(15, 22, 34, 0.16);
   --accent: #2a78d6;
-  --accent-ink: #ffffff;
-  --accent-wash: rgba(42, 120, 214, 0.12);
-  --danger: #d03b3b;
-  --good: #006300;
-  --series: #2a78d6;
-  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --accent-soft: rgba(42, 120, 214, 0.12);
+  --grid: #e4e7ec;
+  --dot: rgba(42, 120, 214, 0.28);
+  --good: #0a8f16;
+  --good-soft: rgba(10, 143, 22, 0.12);
+  --warn: #b7791f;
+  --warn-soft: rgba(214, 158, 46, 0.16);
+  --shadow: 0 1px 2px rgba(15, 22, 34, 0.05), 0 6px 20px rgba(15, 22, 34, 0.05);
 
+  /* status not in the mockup, retained for existing components */
+  --danger: #d03b3b;
+  --accent-ink: #ffffff;
+
+  /* legacy aliases → primitives (resolve per-theme at use site) */
+  --text: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted: var(--muted);
+  --border: var(--hairline);
+  --accent-wash: var(--accent-soft);
+  --series: var(--accent);
+
+  --radius: 16px;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
   font: 16px/1.45 var(--sans);
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--page);
   font-synthesis: none;
@@ -27,22 +54,71 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --text: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --border: rgba(255, 255, 255, 0.1);
-    --hairline: #2c2c2a;
-    --accent: #3987e5;
-    --accent-ink: #ffffff;
-    --accent-wash: rgba(57, 135, 229, 0.18);
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --page: #0d0e11;
+    --surface: #17191d;
+    --surface-2: #1d2025;
+    --ink: #f2f4f7;
+    --ink-2: #b7bdc6;
+    --muted: #7c838d;
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hairline-strong: rgba(255, 255, 255, 0.15);
+    --accent: #3d8bf0;
+    --accent-soft: rgba(61, 139, 240, 0.16);
+    --grid: #26292e;
+    --dot: rgba(120, 170, 235, 0.3);
+    --good: #29b62c;
+    --good-soft: rgba(41, 182, 44, 0.15);
+    --warn: #f2b02a;
+    --warn-soft: rgba(242, 176, 42, 0.14);
+    --shadow: none;
     --danger: #e66767;
-    --good: #0ca30c;
-    --series: #3987e5;
-    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #0d0e11;
+  --surface: #17191d;
+  --surface-2: #1d2025;
+  --ink: #f2f4f7;
+  --ink-2: #b7bdc6;
+  --muted: #7c838d;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --hairline-strong: rgba(255, 255, 255, 0.15);
+  --accent: #3d8bf0;
+  --accent-soft: rgba(61, 139, 240, 0.16);
+  --grid: #26292e;
+  --dot: rgba(120, 170, 235, 0.3);
+  --good: #29b62c;
+  --good-soft: rgba(41, 182, 44, 0.15);
+  --warn: #f2b02a;
+  --warn-soft: rgba(242, 176, 42, 0.14);
+  --shadow: none;
+  --danger: #e66767;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --page: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --ink: #10141a;
+  --ink-2: #47505b;
+  --muted: #79818c;
+  --hairline: rgba(15, 22, 34, 0.1);
+  --hairline-strong: rgba(15, 22, 34, 0.16);
+  --accent: #2a78d6;
+  --accent-soft: rgba(42, 120, 214, 0.12);
+  --grid: #e4e7ec;
+  --dot: rgba(42, 120, 214, 0.28);
+  --good: #0a8f16;
+  --good-soft: rgba(10, 143, 22, 0.12);
+  --warn: #b7791f;
+  --warn-soft: rgba(214, 158, 46, 0.16);
+  --shadow: 0 1px 2px rgba(15, 22, 34, 0.05), 0 6px 20px rgba(15, 22, 34, 0.05);
+  --danger: #d03b3b;
 }
 
 * {

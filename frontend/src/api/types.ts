@@ -80,3 +80,25 @@ export interface MonthCost {
   gallons: number
   fillups: number
 }
+
+/**
+ * Dashboard KPIs — one call powering the summary tiles + header odometer.
+ * Every metric is nullable so a fresh vehicle with no derivable history
+ * degrades to "—" rather than erroring.
+ */
+export interface SummaryStats {
+  /** latest known odometer reading */
+  odometer: number | null
+  total_fills: number
+  /** ISO date of the earliest fill-up */
+  tracked_since: string | null
+  lifetime_mpg: number | null
+  /** trailing-average MPG over the recent window */
+  recent_mpg: number | null
+  /** recent_mpg − lifetime_mpg (negative = running below average) */
+  mpg_delta: number | null
+  cost_per_mile: number | null
+  spend_30d: number | null
+  spend_30d_fills: number
+  avg_days_between: number | null
+}
