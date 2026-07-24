@@ -6,6 +6,7 @@ otherwise corrupt its neighbor's stored values). The ordering axis is mileage
 (standard full-tank method); `missed_last_fill` nulls the derivation.
 """
 
+import datetime
 import sqlite3
 
 # Reused by list, single-get, and stats queries. mpg_estimated means "this
@@ -299,6 +300,93 @@ def mpg_points(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
         " ORDER BY mileage ASC",
         {"vehicle_id": vehicle_id},
     ).fetchall()
+
+
+# Averages ignore the history's unflagged partial-fill outliers, which derive
+# to absurd MPG (45-57+). Anything genuinely achievable sits inside this band.
+_MPG_BAND = (15.0, 40.0)
+
+
+def summary_stats(conn: sqlite3.Connection, vehicle_id: int) -> dict:
+    """Dashboard summary tiles for one vehicle (see models.SummaryStats).
+
+    Two fetches, then windowed pieces in Python for readability:
+      * `real` — derived rows (mileage NOT NULL) via _DERIVED_CTE, mileage-ordered,
+        carrying the LAG-derived mpg. Feeds odometer, the MPG averages, cost/mile.
+      * `all_rows` — every row incl. pending (mileage NULL), date-ordered.
+        Feeds total_fills, tracked_since, spend_30d, avg_days_between.
+    Pending rows carry real cost/gallons/date but no mileage, so they count for
+    spend/day-gaps/totals but never for MPG or cost-per-mile.
+    """
+    real = conn.execute(
+        _DERIVED_CTE
+        + "SELECT mileage, cost, mpg FROM derived ORDER BY mileage ASC",
+        {"vehicle_id": vehicle_id},
+    ).fetchall()
+    all_rows = conn.execute(
+        "SELECT date, cost FROM fillups WHERE vehicle_id = ?"
+        " ORDER BY date ASC, id ASC",
+        (vehicle_id,),
+    ).fetchall()
+
+    lo, hi = _MPG_BAND
+
+    def _mean1(values: list[float]) -> float | None:
+        return round(sum(values) / len(values), 1) if values else None
+
+    # --- MPG averages (real rows only, in-band) ---
+    in_band = [r["mpg"] for r in real if r["mpg"] is not None and lo <= r["mpg"] <= hi]
+    lifetime_mpg = _mean1(in_band)
+    recent_mpg = _mean1(in_band[-8:])
+    mpg_delta = (
+        round(recent_mpg - lifetime_mpg, 1)
+        if recent_mpg is not None and lifetime_mpg is not None
+        else None
+    )
+
+    # --- cost per mile over the most recent 10 real fills ---
+    # 10 fills => up to 9 intervals; each interval's cost is its *ending* fill.
+    cost_per_mile = None
+    window = real[-10:]
+    if len(window) >= 2:
+        miles = window[-1]["mileage"] - window[0]["mileage"]
+        if miles > 0:
+            spent = sum(r["cost"] for r in window[1:] if r["cost"] is not None)
+            cost_per_mile = round(spent / miles, 3)
+
+    # --- 30-day spend window (all rows, relative to the latest fill's date) ---
+    spend_30d = None
+    spend_30d_fills = 0
+    if all_rows:
+        latest = datetime.date.fromisoformat(all_rows[-1]["date"])
+        cutoff = latest - datetime.timedelta(days=30)
+        recent = [
+            r for r in all_rows
+            if datetime.date.fromisoformat(r["date"]) >= cutoff
+        ]
+        spend_30d = round(sum(r["cost"] or 0 for r in recent), 2)
+        spend_30d_fills = len(recent)
+
+    # --- average days between the most recent 12 fills (all rows, by date) ---
+    avg_days_between = None
+    recent_dates = [datetime.date.fromisoformat(r["date"]) for r in all_rows[-12:]]
+    if len(recent_dates) >= 2:
+        avg_days_between = round(
+            (recent_dates[-1] - recent_dates[0]).days / (len(recent_dates) - 1), 1
+        )
+
+    return {
+        "odometer": real[-1]["mileage"] if real else None,
+        "total_fills": len(all_rows),
+        "tracked_since": all_rows[0]["date"] if all_rows else None,
+        "lifetime_mpg": lifetime_mpg,
+        "recent_mpg": recent_mpg,
+        "mpg_delta": mpg_delta,
+        "cost_per_mile": cost_per_mile,
+        "spend_30d": spend_30d,
+        "spend_30d_fills": spend_30d_fills,
+        "avg_days_between": avg_days_between,
+    }
 
 
 def cost_by_month(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:

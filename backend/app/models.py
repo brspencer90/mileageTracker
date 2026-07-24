@@ -98,3 +98,23 @@ class MonthCost(BaseModel):
     cost: float
     gallons: float
     fillups: int
+
+
+class SummaryStats(BaseModel):
+    """Dashboard summary tiles for one vehicle (GET /api/stats/summary).
+
+    The [15,40] MPG band on lifetime/recent averages deliberately drops the
+    history's unflagged partial-fill outliers (which derive to 45-57+ MPG) so
+    the headline averages aren't skewed; see docs/PRODUCT_PLAN.md / CLAUDE.md.
+    """
+
+    odometer: int | None = None  # MAX(mileage); pending (NULL) rows ignored
+    total_fills: int  # all rows incl. pending
+    tracked_since: datetime.date | None = None  # MIN(date)
+    lifetime_mpg: float | None = None  # mean derived mpg in [15,40], 1dp
+    recent_mpg: float | None = None  # mean of most recent 8 in-band mpg, 1dp
+    mpg_delta: float | None = None  # recent - lifetime, 1dp
+    cost_per_mile: float | None = None  # over most recent 10 real fills, 3dp
+    spend_30d: float | None = None  # SUM(cost) within 30d of latest fill
+    spend_30d_fills: int  # count of fills in that window
+    avg_days_between: float | None = None  # mean gap over recent 12 fills, 1dp

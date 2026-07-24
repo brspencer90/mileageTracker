@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import queries
 from ..db import get_db
-from ..models import MonthCost, MpgPoint
+from ..models import MonthCost, MpgPoint, SummaryStats
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -25,3 +25,10 @@ def mpg(vehicle_id: int, conn: sqlite3.Connection = Depends(get_db)):
 def cost_by_month(vehicle_id: int, conn: sqlite3.Connection = Depends(get_db)):
     _check_vehicle(conn, vehicle_id)
     return [dict(row) for row in queries.cost_by_month(conn, vehicle_id)]
+
+
+@router.get("/summary", response_model=SummaryStats)
+def summary(vehicle_id: int, conn: sqlite3.Connection = Depends(get_db)):
+    """Dashboard summary tiles. Empty-but-valid vehicle returns Nones/0s, not 404."""
+    _check_vehicle(conn, vehicle_id)
+    return queries.summary_stats(conn, vehicle_id)
