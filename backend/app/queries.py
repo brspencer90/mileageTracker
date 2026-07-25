@@ -1,37 +1,19 @@
-"""All SQL lives here, including the LAG() derivation CTE.
+"""All SQL lives here, plus the partial-fill-aware MPG derivation (MT-9).
 
 MPF/MPG are derived at read time, never stored (editing/deleting a row would
 otherwise corrupt its neighbor's stored values). The ordering axis is mileage
-(the true monotonic axis), not date. MPG = mpf / current row's gallons
-(standard full-tank method); `missed_last_fill` nulls the derivation.
+(the true monotonic axis), not date. MPG = window miles / gallons burned over
+that window (standard full-tank method).
+
+MT-9: a `partial_fill` is a top-up that didn't fill the tank to full, so it has
+no MPG of its own — its gallons roll forward into the NEXT full fill's window.
+`missed_last_fill` corrupts the current window (its miles can't be attributed to
+the fuel measured). The old LAG() CTE couldn't express roll-up, so derivation is
+now a single O(n) Python pass in `_derive`.
 """
 
 import datetime
 import sqlite3
-
-# Reused by list, single-get, and stats queries. mpg_estimated means "this
-# MPG value rests on at least one estimated odometer reading" — the row's own
-# mileage_estimated or the previous row's (the interval's other endpoint).
-_DERIVED_CTE = """
-WITH ordered AS (
-    SELECT f.*,
-        LAG(mileage) OVER (PARTITION BY vehicle_id ORDER BY mileage) AS prev_mileage,
-        LAG(mileage_estimated) OVER (PARTITION BY vehicle_id ORDER BY mileage)
-            AS prev_mileage_estimated
-    FROM fillups f
-    WHERE vehicle_id = :vehicle_id
-      AND mileage IS NOT NULL  -- MT-24: pending rows never enter the LAG ordering
-),
-derived AS (
-    SELECT *,
-        CASE WHEN missed_last_fill = 0 AND prev_mileage IS NOT NULL
-             THEN mileage - prev_mileage END                                    AS mpf,
-        CASE WHEN missed_last_fill = 0 AND prev_mileage IS NOT NULL
-             THEN ROUND((mileage - prev_mileage) / gallons, 2) END              AS mpg,
-        (mileage_estimated = 1 OR COALESCE(prev_mileage_estimated, 0) = 1)      AS mpg_estimated
-    FROM ordered
-)
-"""
 
 _FILLUP_COLUMNS = (
     "vehicle_id",
@@ -42,7 +24,105 @@ _FILLUP_COLUMNS = (
     "station",
     "zip",
     "missed_last_fill",
+    "partial_fill",
 )
+
+
+# --- MT-9 derivation --------------------------------------------------------
+
+
+def _median(values: list[float]) -> float | None:
+    s = sorted(values)
+    n = len(s)
+    if n == 0:
+        return None
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
+
+
+def _derive(rows: list[sqlite3.Row]) -> list[dict]:
+    """Partial-fill-aware MPG derivation over one vehicle's real fills.
+
+    `rows` must be that vehicle's fills with mileage NOT NULL, ordered by mileage
+    ascending. Returns dicts (copies) with mpf, mpg, mpg_estimated, and
+    suggested_partial added.
+
+    Algorithm: walk fills in mileage order, accumulating gallons since the last
+    full fill that opened a clean window (`anchor`). A full fill closes the
+    window: mpg = (its mileage - anchor) / gallons burned since the anchor. mpf/
+    mpg are None for partial fills, the first full fill (no anchor), any full
+    fill whose window was corrupted by a missed fill, and leading/trailing
+    partials. mpg_estimated for a full fill = this fill's mileage estimated OR the
+    anchor's mileage estimated.
+    """
+    out = [dict(r) for r in rows]
+
+    anchor: int | None = None       # mileage of the last full fill that opened a window
+    anchor_estimated = False
+    accum = 0.0                     # gallons added since anchor (incl. the closing fill)
+    window_valid = True             # no missed-fill gap since anchor
+
+    for row in out:
+        if row["missed_last_fill"]:
+            window_valid = False
+        accum += row["gallons"]
+        if not row["partial_fill"]:  # FULL fill: close the window
+            if anchor is not None and window_valid and accum > 0:
+                row["mpf"] = row["mileage"] - anchor
+                row["mpg"] = round(row["mpf"] / accum, 2)
+                row["mpg_estimated"] = bool(row["mileage_estimated"] or anchor_estimated)
+            else:
+                row["mpf"] = None
+                row["mpg"] = None
+                row["mpg_estimated"] = bool(row["mileage_estimated"])
+            anchor = row["mileage"]
+            anchor_estimated = bool(row["mileage_estimated"])
+            accum = 0.0
+            window_valid = True      # open a fresh window here
+        else:                        # PARTIAL fill: no MPG, keep accumulating
+            row["mpf"] = None
+            row["mpg"] = None
+            row["mpg_estimated"] = bool(row["mileage_estimated"])
+
+    # --- auto-suggest detector (a hint; flags nothing) ---
+    median_full = _median([r["gallons"] for r in out if not r["partial_fill"]])
+    for row in out:
+        candidate = (
+            not row["partial_fill"]
+            and not row["missed_last_fill"]
+            and row["mileage"] is not None
+        )
+        high_mpg = row["mpg"] is not None and row["mpg"] > 40
+        tiny_fill = median_full is not None and row["gallons"] < 0.55 * median_full
+        row["suggested_partial"] = bool(candidate and (high_mpg or tiny_fill))
+
+    return out
+
+
+def _augment_pending(row: sqlite3.Row) -> dict:
+    """A pending row (mileage NULL) carries no derivation."""
+    d = dict(row)
+    d["mpf"] = None
+    d["mpg"] = None
+    d["mpg_estimated"] = False
+    d["suggested_partial"] = False
+    return d
+
+
+def _real_rows(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM fillups WHERE vehicle_id = ? AND mileage IS NOT NULL"
+        " ORDER BY mileage ASC, id ASC",
+        (vehicle_id,),
+    ).fetchall()
+
+
+def _pending_rows(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM fillups WHERE vehicle_id = ? AND mileage IS NULL"
+        " ORDER BY date DESC, id DESC",
+        (vehicle_id,),
+    ).fetchall()
 
 
 # --- vehicles ---------------------------------------------------------------
@@ -61,42 +141,14 @@ def get_vehicle(conn: sqlite3.Connection, vehicle_id: int) -> sqlite3.Row | None
 # --- fillups ----------------------------------------------------------------
 
 
-# Pending rows (mileage NULL) don't go through the LAG derivation; they're
-# unioned back in with null mpf/mpg. Column list must match `derived`
-# (fillups.* + prev_mileage + prev_mileage_estimated + mpf + mpg + mpg_estimated).
-_PENDING_CTE = """,
-pending AS (
-    SELECT f.*,
-        NULL AS prev_mileage, NULL AS prev_mileage_estimated,
-        NULL AS mpf, NULL AS mpg, 0 AS mpg_estimated
-    FROM fillups f
-    WHERE vehicle_id = :vehicle_id AND mileage IS NULL
-),
-combined AS (
-    SELECT *, 0 AS is_pending FROM derived
-    UNION ALL
-    SELECT *, 1 AS is_pending FROM pending
-)
-"""
-
-
 def list_fillups(
     conn: sqlite3.Connection, vehicle_id: int, limit: int, offset: int
-) -> list[sqlite3.Row]:
+) -> list[dict]:
     # Pending rows first (newest date first), then real rows by mileage DESC.
-    return conn.execute(
-        _DERIVED_CTE
-        + _PENDING_CTE
-        + """
-SELECT * FROM combined
-ORDER BY is_pending DESC,
-         CASE WHEN is_pending = 1 THEN date END DESC,
-         mileage DESC,
-         id DESC
-LIMIT :limit OFFSET :offset
-""",
-        {"vehicle_id": vehicle_id, "limit": limit, "offset": offset},
-    ).fetchall()
+    pending = [_augment_pending(r) for r in _pending_rows(conn, vehicle_id)]
+    real_desc = list(reversed(_derive(_real_rows(conn, vehicle_id))))
+    combined = pending + real_desc
+    return combined[offset : offset + limit]
 
 
 def count_fillups(conn: sqlite3.Connection, vehicle_id: int) -> int:
@@ -105,48 +157,25 @@ def count_fillups(conn: sqlite3.Connection, vehicle_id: int) -> int:
     ).fetchone()[0]
 
 
-def get_fillup(conn: sqlite3.Connection, fillup_id: int) -> sqlite3.Row | None:
+def get_fillup(conn: sqlite3.Connection, fillup_id: int) -> dict | None:
     """Fetch one fillup with derived mpf/mpg (derivation runs over its vehicle).
 
     Returns pending rows (mileage NULL) too, with null mpf/mpg/mpg_estimated.
     """
-    return conn.execute(
-        """
-WITH ordered AS (
-    SELECT f.*,
-        LAG(mileage) OVER (PARTITION BY vehicle_id ORDER BY mileage) AS prev_mileage,
-        LAG(mileage_estimated) OVER (PARTITION BY vehicle_id ORDER BY mileage)
-            AS prev_mileage_estimated
-    FROM fillups f
-    WHERE vehicle_id = (SELECT vehicle_id FROM fillups WHERE id = :id)
-      AND mileage IS NOT NULL
-),
-derived AS (
-    SELECT *,
-        CASE WHEN missed_last_fill = 0 AND prev_mileage IS NOT NULL
-             THEN mileage - prev_mileage END                                    AS mpf,
-        CASE WHEN missed_last_fill = 0 AND prev_mileage IS NOT NULL
-             THEN ROUND((mileage - prev_mileage) / gallons, 2) END              AS mpg,
-        (mileage_estimated = 1 OR COALESCE(prev_mileage_estimated, 0) = 1)      AS mpg_estimated
-    FROM ordered
-),
-pending AS (
-    SELECT f.*,
-        NULL AS prev_mileage, NULL AS prev_mileage_estimated,
-        NULL AS mpf, NULL AS mpg, 0 AS mpg_estimated
-    FROM fillups f
-    WHERE vehicle_id = (SELECT vehicle_id FROM fillups WHERE id = :id)
-      AND mileage IS NULL
-),
-combined AS (
-    SELECT * FROM derived
-    UNION ALL
-    SELECT * FROM pending
-)
-SELECT * FROM combined WHERE id = :id
-""",
-        {"id": fillup_id},
+    raw = conn.execute(
+        "SELECT vehicle_id, mileage FROM fillups WHERE id = ?", (fillup_id,)
     ).fetchone()
+    if raw is None:
+        return None
+    if raw["mileage"] is None:
+        pending = conn.execute(
+            "SELECT * FROM fillups WHERE id = ?", (fillup_id,)
+        ).fetchone()
+        return _augment_pending(pending)
+    for row in _derive(_real_rows(conn, raw["vehicle_id"])):
+        if row["id"] == fillup_id:
+            return row
+    return None
 
 
 def get_fillup_raw(conn: sqlite3.Connection, fillup_id: int) -> sqlite3.Row | None:
@@ -293,13 +322,18 @@ def fillup_context(conn: sqlite3.Connection, vehicle_id: int) -> dict:
 # --- stats ------------------------------------------------------------------
 
 
-def mpg_points(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
-    return conn.execute(
-        _DERIVED_CTE
-        + "SELECT date, mileage, mpg, mpg_estimated AS estimated FROM derived"
-        " ORDER BY mileage ASC",
-        {"vehicle_id": vehicle_id},
-    ).fetchall()
+def mpg_points(conn: sqlite3.Connection, vehicle_id: int) -> list[dict]:
+    # Derived real rows ascending; a point's mpg is None where derivation is None
+    # (partials and missed-fill gaps included, so the chart line breaks there).
+    return [
+        {
+            "date": r["date"],
+            "mileage": r["mileage"],
+            "mpg": r["mpg"],
+            "estimated": r["mpg_estimated"],
+        }
+        for r in _derive(_real_rows(conn, vehicle_id))
+    ]
 
 
 # Averages ignore the history's unflagged partial-fill outliers, which derive
@@ -311,18 +345,14 @@ def summary_stats(conn: sqlite3.Connection, vehicle_id: int) -> dict:
     """Dashboard summary tiles for one vehicle (see models.SummaryStats).
 
     Two fetches, then windowed pieces in Python for readability:
-      * `real` — derived rows (mileage NOT NULL) via _DERIVED_CTE, mileage-ordered,
-        carrying the LAG-derived mpg. Feeds odometer, the MPG averages, cost/mile.
+      * `real` — derived rows (mileage NOT NULL) via _derive, mileage-ordered,
+        carrying the partial-aware mpg. Feeds odometer, MPG averages, cost/mile.
       * `all_rows` — every row incl. pending (mileage NULL), date-ordered.
         Feeds total_fills, tracked_since, spend_30d, avg_days_between.
     Pending rows carry real cost/gallons/date but no mileage, so they count for
     spend/day-gaps/totals but never for MPG or cost-per-mile.
     """
-    real = conn.execute(
-        _DERIVED_CTE
-        + "SELECT mileage, cost, mpg FROM derived ORDER BY mileage ASC",
-        {"vehicle_id": vehicle_id},
-    ).fetchall()
+    real = _derive(_real_rows(conn, vehicle_id))
     all_rows = conn.execute(
         "SELECT date, cost FROM fillups WHERE vehicle_id = ?"
         " ORDER BY date ASC, id ASC",

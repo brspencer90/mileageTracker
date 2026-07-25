@@ -21,6 +21,8 @@ export interface FillupCreate {
   /** 5 digits when present */
   zip: string | null
   missed_last_fill: boolean
+  /** top-up that didn't fill the tank; its fuel rolls into the next full fill (MT-9) */
+  partial_fill: boolean
 }
 
 /** PATCH semantics: all fields optional, vehicle_id excluded. */
@@ -43,6 +45,12 @@ export interface FillupOut extends Omit<FillupCreate, 'cost'> {
   mpg: number | null
   /** MPG rests on at least one estimated odometer reading */
   mpg_estimated: boolean
+  /**
+   * Server-detected likely partial fill the user hasn't flagged yet (MT-9):
+   * true = a candidate (e.g. absurd high derived MPG). Changes nothing until
+   * the user acts on the suggestion.
+   */
+  suggested_partial: boolean
   created_at: string
 }
 

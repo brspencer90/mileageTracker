@@ -27,11 +27,17 @@ def test_migration_makes_mileage_nullable_and_preserves_rows(tmp_path):
         "PRAGMA user_version = 2;"
     )
     vid = seed_vehicle(conn, name="Tiger")
-    seed_fillup(conn, vid, 1000, date="2023-01-01")
-    seed_fillup(conn, vid, 1300, date="2023-01-10")
+    # Raw inserts against the hand-built pre-migration schema (the seed_fillup
+    # helper targets the current schema, which has columns this table lacks yet).
+    conn.executemany(
+        "INSERT INTO fillups (vehicle_id, date, mileage, gallons, cost)"
+        " VALUES (?, ?, ?, 10.0, 30.0)",
+        [(vid, "2023-01-01", 1000), (vid, "2023-01-10", 1300)],
+    )
+    conn.commit()
     before = conn.execute("SELECT COUNT(*) FROM fillups").fetchone()[0]
 
-    assert run_migrations(conn) == 3
+    assert run_migrations(conn) == 4  # 0003 (nullable) + 0004 (partial_fill)
     assert conn.execute("SELECT COUNT(*) FROM fillups").fetchone()[0] == before
 
     # mileage is now nullable and multiple NULLs coexist under the UNIQUE.

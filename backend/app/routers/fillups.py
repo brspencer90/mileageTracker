@@ -30,11 +30,13 @@ def _to_out(row: sqlite3.Row, suggested_mileage: int | None = None) -> dict:
         "station": d["station"],
         "zip": d["zip"],
         "missed_last_fill": bool(d["missed_last_fill"]),
+        "partial_fill": bool(d["partial_fill"]),
         "mileage_estimated": bool(d["mileage_estimated"]),
         "gauge_notches": d["gauge_notches"],
         "mpf": d["mpf"],
         "mpg": d["mpg"],
         "mpg_estimated": bool(d["mpg_estimated"]),
+        "suggested_partial": bool(d["suggested_partial"]),
         "suggested_mileage": suggested_mileage,
         "created_at": d["created_at"],
     }
@@ -123,6 +125,7 @@ def create_fillup(payload: FillupCreate, conn: sqlite3.Connection = Depends(get_
             "station": payload.station,
             "zip": payload.zip,
             "missed_last_fill": 1 if payload.missed_last_fill else 0,
+            "partial_fill": 1 if payload.partial_fill else 0,
         },
     )
     return _out_with_suggestion(conn, queries.get_fillup(conn, fillup_id))
@@ -164,6 +167,8 @@ def update_fillup(
             )
     if "missed_last_fill" in fields and fields["missed_last_fill"] is not None:
         fields["missed_last_fill"] = 1 if fields["missed_last_fill"] else 0
+    if "partial_fill" in fields and fields["partial_fill"] is not None:
+        fields["partial_fill"] = 1 if fields["partial_fill"] else 0
 
     queries.update_fillup(conn, fillup_id, fields)
     return _to_out(queries.get_fillup(conn, fillup_id))

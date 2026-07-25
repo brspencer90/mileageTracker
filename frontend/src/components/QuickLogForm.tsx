@@ -24,6 +24,7 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
   const [date, setDate] = useState(todayISO())
   const [dateOpen, setDateOpen] = useState(false)
   const [missedLastFill, setMissedLastFill] = useState(false)
+  const [partialFill, setPartialFill] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -91,9 +92,20 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
 
   // Live preview (MT-7): computed client-side from prev_mileage as you type.
   // MT-24: when logging without an odometer, mileage/MPG are deferred instead.
+  // MT-9: a partial fill has no MPG of its own; its fuel rolls into the next
+  // full fill. Annotate the preview and suppress the computed MPG.
   let preview: string | null = null
   if (noOdometer) {
-    preview = 'Mileage & MPG will be estimated once a later fill is logged.'
+    preview = partialFill
+      ? 'Partial fill — mileage estimated later; its fuel rolls into your next full fill.'
+      : 'Mileage & MPG will be estimated once a later fill is logged.'
+  } else if (partialFill) {
+    if (prevMileage !== null && mileageValid) {
+      const miles = mileageNum - prevMileage
+      preview = `+${miles} mi — partial fill, its fuel rolls into your next full fill`
+    } else {
+      preview = 'Partial fill — its fuel rolls into your next full fill'
+    }
   } else if (prevMileage !== null && mileageValid) {
     const miles = mileageNum - prevMileage
     if (missedLastFill) {
@@ -139,15 +151,18 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
       station: station.trim() === '' ? null : station.trim(),
       zip: zip === '' ? null : zip,
       missed_last_fill: missedLastFill,
+      partial_fill: partialFill,
     }
     try {
       const saved = await createFillup(body)
       showToast(
-        noOdometer
-          ? 'Saved — mileage pending'
-          : saved.mpg !== null
-            ? `Saved — ${saved.mpg.toFixed(1)} MPG`
-            : 'Saved',
+        partialFill
+          ? 'Saved — partial fill, MPG rolls into your next full fill'
+          : noOdometer
+            ? 'Saved — mileage pending'
+            : saved.mpg !== null
+              ? `Saved — ${saved.mpg.toFixed(1)} MPG`
+              : 'Saved',
       )
       // Reset for the next fill-up; context refetch re-prefills station/zip.
       setMileage('')
@@ -157,6 +172,7 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
       setDate(todayISO())
       setDateOpen(false)
       setMissedLastFill(false)
+      setPartialFill(false)
       loadContext()
       onLogged()
     } catch (err: unknown) {
@@ -336,6 +352,15 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
             onChange={(e) => setMissedLastFill(e.target.checked)}
           />
           <span>I missed logging my last fill-up</span>
+        </label>
+
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={partialFill}
+            onChange={(e) => setPartialFill(e.target.checked)}
+          />
+          <span>Partial fill — didn&apos;t fill to full</span>
         </label>
       </div>
 

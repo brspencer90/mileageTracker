@@ -52,6 +52,12 @@ function changedFields(prev: FillupOut, body: FillupUpdate): string[] {
   ) {
     out.push('missed-fill flag')
   }
+  if (
+    body.partial_fill !== undefined &&
+    body.partial_fill !== prev.partial_fill
+  ) {
+    out.push('partial-fill flag')
+  }
   return out
 }
 
@@ -158,7 +164,8 @@ function HistoryTable({ vehicleId, onChanged, lifetimeMpg }: Props) {
     const mpgAffected =
       changed.includes('mileage') ||
       changed.includes('gallons') ||
-      changed.includes('missed-fill flag')
+      changed.includes('missed-fill flag') ||
+      changed.includes('partial-fill flag')
     try {
       const fresh = await refreshInPlace()
       let msg =
@@ -224,6 +231,22 @@ function HistoryTable({ vehicleId, onChanged, lifetimeMpg }: Props) {
     }
   }
 
+  // MT-9: accept the server's "likely partial fill" suggestion for a row.
+  // Suggest-don't-set: nothing changes until the user taps this.
+  const handleFlagPartial = async (f: FillupOut) => {
+    setActionError(null)
+    try {
+      await updateFillup(f.id, { partial_fill: true })
+      await refreshInPlace()
+      showToast('Flagged as partial — MPG rolled into the next full fill.')
+      onChanged()
+    } catch (e: unknown) {
+      setActionError(
+        e instanceof ApiError ? e.message : 'Could not flag as partial',
+      )
+    }
+  }
+
   if (loadError !== null) {
     return <p className="status-msg error-msg">{loadError}</p>
   }
@@ -286,6 +309,7 @@ function HistoryTable({ vehicleId, onChanged, lifetimeMpg }: Props) {
               )}
               {(f.station !== null ||
                 f.missed_last_fill ||
+                f.partial_fill ||
                 f.mileage_estimated) && (
                 <div className="fillup-meta">
                   {f.station !== null && (
@@ -297,9 +321,26 @@ function HistoryTable({ vehicleId, onChanged, lifetimeMpg }: Props) {
                   {f.missed_last_fill && (
                     <span className="missed-badge">missed previous fill</span>
                   )}
+                  {f.partial_fill && (
+                    <span className="missed-badge">partial fill</span>
+                  )}
                   {f.mileage_estimated && (
                     <span className="estimated-badge">estimated odometer</span>
                   )}
+                </div>
+              )}
+              {f.suggested_partial && !f.partial_fill && (
+                <div className="suggest-chip" role="group">
+                  <span className="suggest-chip-text">
+                    Unusually high MPG — flag as partial fill?
+                  </span>
+                  <button
+                    type="button"
+                    className="suggest-chip-btn"
+                    onClick={() => void handleFlagPartial(f)}
+                  >
+                    Flag as partial
+                  </button>
                 </div>
               )}
               {pending && (
@@ -383,6 +424,7 @@ function EditDialog({ fillup, onClose, onSaved }: EditProps) {
   const [station, setStation] = useState(fillup.station ?? '')
   const [zip, setZip] = useState(fillup.zip ?? '')
   const [missed, setMissed] = useState(fillup.missed_last_fill)
+  const [partial, setPartial] = useState(fillup.partial_fill)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -415,6 +457,7 @@ function EditDialog({ fillup, onClose, onSaved }: EditProps) {
       station: station.trim() === '' ? null : station.trim(),
       zip: zip === '' ? null : zip,
       missed_last_fill: missed,
+      partial_fill: partial,
     }
     try {
       await updateFillup(fillup.id, body)
@@ -499,6 +542,14 @@ function EditDialog({ fillup, onClose, onSaved }: EditProps) {
               onChange={(e) => setMissed(e.target.checked)}
             />
             <span>Missed the previous fill-up</span>
+          </label>
+          <label className="check-field">
+            <input
+              type="checkbox"
+              checked={partial}
+              onChange={(e) => setPartial(e.target.checked)}
+            />
+            <span>Partial fill — didn&apos;t fill to full</span>
           </label>
           {error !== null && (
             <p className="inline-error" role="alert">

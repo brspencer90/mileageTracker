@@ -449,6 +449,44 @@
   cursor: pointer;
 }
 
+/* ---------- partial-fill suggestion chip, MT-9 ---------- */
+
+.suggest-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  font-size: 13px;
+}
+
+.suggest-chip-text {
+  color: var(--warn);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.suggest-chip-btn {
+  flex: none;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  background: none;
+  color: var(--warn);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.suggest-chip-btn:active {
+  background: var(--warn);
+  color: var(--surface);
+}
+
 .fillup-actions {
   display: flex;
   gap: 8px;

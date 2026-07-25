@@ -53,12 +53,13 @@ def seed_fillup(
     missed_last_fill: bool = False,
     mileage_estimated: bool = False,
     gauge_notches: float | None = None,
+    partial_fill: bool = False,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO fillups"
         " (vehicle_id, date, mileage, gallons, cost, station, zip,"
-        "  missed_last_fill, mileage_estimated, gauge_notches)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "  missed_last_fill, mileage_estimated, gauge_notches, partial_fill)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             vehicle_id,
             date,
@@ -70,6 +71,7 @@ def seed_fillup(
             1 if missed_last_fill else 0,
             1 if mileage_estimated else 0,
             gauge_notches,
+            1 if partial_fill else 0,
         ),
     )
     conn.commit()

@@ -27,6 +27,9 @@ class FillupCreate(BaseModel):
     station: str | None = None
     zip: str | None = Field(default=None, pattern=ZIP_PATTERN)
     missed_last_fill: bool = False
+    # MT-9: a top-up that didn't fill the tank to full. It gets no MPG of its
+    # own; its fuel rolls into the next full fill's window. Any gallons > 0.
+    partial_fill: bool = False
 
 
 class ResolveMileage(BaseModel):
@@ -45,6 +48,7 @@ class FillupUpdate(BaseModel):
     station: str | None = None
     zip: str | None = Field(default=None, pattern=ZIP_PATTERN)
     missed_last_fill: bool | None = None
+    partial_fill: bool | None = None  # MT-9
 
 
 class FillupOut(BaseModel):
@@ -57,11 +61,15 @@ class FillupOut(BaseModel):
     station: str | None = None
     zip: str | None = None
     missed_last_fill: bool
+    partial_fill: bool = False  # MT-9: top-up that didn't fill to full; no MPG of its own
     mileage_estimated: bool = False  # odometer reconstructed on import (MT-21) or backfill (MT-24)
     gauge_notches: float | None = None  # raw xlsx gauge column (MT-20/MT-22)
     mpf: int | None = None
     mpg: float | None = None
     mpg_estimated: bool = False  # MPG rests on >=1 estimated odometer reading
+    # MT-9: an unflagged fill this looks like a partial (absurd derived MPG or a
+    # tiny fill). A hint only — flips nothing until the user sets partial_fill.
+    suggested_partial: bool = False
     # MT-24: for a pending row bracketed by real fills before AND after (by
     # date), the gallons-weighted interpolation estimate; else null.
     suggested_mileage: int | None = None
