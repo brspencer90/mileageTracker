@@ -8,20 +8,58 @@ permissions:
 jobs:
   validate:                    # this job name is the required-check "context" for branch protection
     runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Str0ng.Test.P4ss"   # ephemeral CI-only test server
+        ports:
+          - 1433:1433
+    env:
+      # Test-server connection; conftest swaps DATABASE -> mileageTracker_test.
+      SA_PW: "Str0ng.Test.P4ss"
     steps:
       - uses: actions/checkout@v4
 
-      # --- backend: pytest ---
+      # --- SQL Server client (ODBC Driver 18) on the runner ---
+      - name: Install ODBC Driver 18
+        run: |
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          echo "deb [signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/$(lsb_release -rs)/prod $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc-dev
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Backend deps
+
+      - name: Wait for SQL Server + create test database
+        run: |
+          python - <<'PY'
+          import time, pyodbc
+          cs = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;UID=sa;PWD=Str0ng.Test.P4ss;TrustServerCertificate=Yes"
+          for i in range(30):
+              try:
+                  c = pyodbc.connect(cs, timeout=5, autocommit=True)
+                  c.execute("IF DB_ID('mileageTracker_test') IS NULL CREATE DATABASE mileageTracker_test")
+                  print("SQL Server ready; test DB ensured"); break
+              except pyodbc.Error as e:
+                  print(f"waiting for SQL Server ({i})..."); time.sleep(3)
+          else:
+              raise SystemExit("SQL Server did not become ready")
+          PY
+
+      - name: Write repo-root .env for the test connection
+        run: |
+          echo "sqlss_conn_str = 'SERVER={localhost,1433};DATABASE={mileageTracker};UID={sa};PWD=Str0ng.Test.P4ss'" > .env
+
+      # --- backend: pytest against SQL Server ---
+      - name: Backend deps + tests
         working-directory: backend
         run: |
           python -m pip install -r requirements.txt -r requirements-dev.txt
-      - name: Backend tests
-        working-directory: backend
-        run: python -m pytest -q
+          python -m pytest -q
 
       # --- frontend: typecheck, lint, build ---
       - uses: actions/setup-node@v4

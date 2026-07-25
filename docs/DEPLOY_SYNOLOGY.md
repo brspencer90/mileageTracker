@@ -5,8 +5,7 @@ to GHCR; **Watchtower** on the DS220+ polls GHCR and auto-updates the container.
 Nothing builds on the NAS — it only needs outbound internet to the registry.
 
 Based on the reusable playbook at `flightTracker/docs/ci-cd-docker-nas.md`; this
-file is that template with the placeholders filled in for **this** project and the
-SQLite-specific bits called out.
+file is that template with the placeholders filled in for **this** project.
 
 ## Filled-in values
 
@@ -17,38 +16,37 @@ SQLite-specific bits called out.
 | Build context | repo root (`Dockerfile` at root; needs both `backend/` and `frontend/`) |
 | Host:container port | `8088:8000` (change 8088 in `docker-compose.yml` if it clashes) |
 | NAS stack dir | `/volume1/docker/mileage-tracker` |
-| Runtime secrets | **none today** — SQLite only, no external APIs (add later for MT-14's EIA key) |
+| Runtime secret | `sqlss_conn_str` — the SQL Server connection string (in a git-ignored `mileage-tracker.env` on the NAS) |
 | Watchtower poll | 300s |
 
-## The one thing that's different here: SQLite state
+## Database: SQL Server (stateless container)
 
-The image carries **only code** — the database is **not** baked in. `MT_DB_PATH`
-points at `/data/mileage.db`, and `docker-compose.yml` mounts
-`{{NAS_STACK_DIR}}/data` → `/data`, so your fill-up history lives on the NAS and
-**survives every auto-update**. The container runs as a fixed non-root UID (10001);
-the mounted `data/` dir must be writable by it.
+The app's data lives in **Microsoft SQL Server at `192.168.0.20`** — the v2
+`vehicles`/`fillups` tables in the `mileageTracker` DB (the legacy `mileage` table
+is left alone). The **container is stateless**: no volume, no local DB. It reads
+the connection string from `sqlss_conn_str` at runtime, and `run_schema` creates
+the tables on first connect if they don't exist.
 
-**Seed your real data once** (the volume starts empty; a fresh start would give you
-an empty DB): copy your local source-of-truth DB up before/after the first `up`:
+**Your 205 fills are already migrated into SQL Server** (via
+`scripts/migrate_sqlite_to_sqlserver.py`, run once from the dev machine) — so there
+is **no seed step on the NAS**. The container just needs the connection string.
+(The pre-migration SQLite snapshots remain in `data/backups/` as a safety net.)
 
-```bash
-# from the dev machine (adjust NAS host)
-scp data/mileage.db bryan@<nas>:/volume1/docker/mileage-tracker/data/mileage.db
-# then on the NAS, make it owned by the container's UID:
-ssh bryan@<nas> 'sudo chown 10001:10001 /volume1/docker/mileage-tracker/data/mileage.db'
+The one config file you create on the NAS is `mileage-tracker.env`:
 ```
-
-(Regenerate a CSV backup anytime with `scripts/export_backup.py`; the xlsx and CSVs
-stay on disk as backups and are never committed or baked into the image.)
+sqlss_conn_str = 'SERVER={192.168.0.20,1433};DATABASE={mileageTracker};UID={SA};PWD=...'
+```
+(Same value as your dev-machine `.env`. Note the brace-quoted `SERVER={host,port}` —
+that's the ODBC form the app expects.)
 
 ## Files in the repo (already created)
 
 - `Dockerfile` — multi-stage: Node builds the React PWA, then a slim Python image
-  runs uvicorn serving the API + built SPA. Non-root UID 10001, `GIT_SHA` build
-  stamp, healthcheck hits `/api/health` (which runs `SELECT 1`, so it verifies the DB).
-- `.dockerignore` — keeps personal data (`*.xlsx`, `*.csv`, `data/`, `*.db`) and
-  secrets out of the image.
-- `docker-compose.yml` — the NAS deploy: the app + Watchtower + the `/data` volume.
+  (with the **Microsoft ODBC Driver 18** baked in) runs uvicorn serving the API +
+  built SPA. Non-root UID 10001, `GIT_SHA` build stamp, healthcheck hits
+  `/api/health` (which runs `SELECT 1` against SQL Server, so it verifies the DB).
+- `.dockerignore` — keeps personal data (`*.xlsx`, `*.csv`, `*.db`) and secrets out of the image.
+- `docker-compose.yml` — the NAS deploy: the app + Watchtower, connection string via `env_file`.
 - `.github/workflows/ci.yml` — PR check `validate`: backend pytest, frontend
   typecheck/lint/build, and an image build (no push). Required for merge.
 - `.github/workflows/deploy.yml` — on push to `main`: build + push `:latest` and
@@ -83,12 +81,16 @@ printf '%s' 'ghp_YOURTOKEN' | sudo docker login ghcr.io -u brspencer90 --passwor
 
 **2.2 Deploy.**
 
-1. `mkdir -p /volume1/docker/mileage-tracker/data`
+1. `mkdir -p /volume1/docker/mileage-tracker`
 2. Put `docker-compose.yml` in `/volume1/docker/mileage-tracker/` (or point Container
    Manager at the repo checkout).
-3. Seed the DB (see "Seed your real data once" above).
+3. Create `mileage-tracker.env` next to it with the connection string (see the DB
+   section above). No data seeding — your 205 fills are already in SQL Server.
 4. Container Manager → **Project → Create** → select the compose file → build/up.
 5. Browse `http://<nas>:8088`.
+
+*(If the SQL Server itself runs on this same NAS, the container reaches it over the
+LAN IP `192.168.0.20` from the default bridge network — no special networking needed.)*
 
 ## Verify
 
@@ -106,9 +108,9 @@ curl -s http://<nas>:8088/api/version     # {"version":"<sha>"}
 - **Roll back:** pin the last-good tag in `docker-compose.yml`
   (`image: ghcr.io/brspencer90/mileage-tracker:sha-<good>`) and re-up; restore
   `:latest` when fixed.
-- **Schema migrations** run automatically at container startup (the FastAPI lifespan
-  runs the migration runner against `/data/mileage.db`). They're additive; the volume
-  keeps the data across the swap.
+- **Schema** is applied automatically at container startup (`run_schema` runs the
+  idempotent `app/schema.sql` against SQL Server). Since old and new containers briefly
+  share the one SQL Server during a Watchtower swap, keep schema changes additive.
 
 ## Remote access
 

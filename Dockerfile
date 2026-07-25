@@ -1,10 +1,11 @@
-# Mileage Tracker — one image: FastAPI + SQLite serving the built React PWA.
+# Mileage Tracker — one image: FastAPI serving the built React PWA, backed by
+# the SQL Server at 192.168.0.20 (via pyodbc + ODBC Driver 18).
 # Build context is the REPO ROOT (it needs both frontend/ and backend/):
 #   docker build -t mileage-tracker .
 #
-# The SQLite DB is NOT baked in — it lives on a mounted volume at /data
-# (MT_DB_PATH), so your fill-up history survives image updates. See
-# docs/DEPLOY_SYNOLOGY.md for the one-time data seed.
+# No database is baked in or mounted: the connection string (sqlss_conn_str) is
+# injected at runtime from a git-ignored env file on the NAS. See
+# docs/DEPLOY_SYNOLOGY.md.
 
 # ---- stage 1: build the frontend (Vite/React -> dist) ----
 FROM node:22-alpine AS frontend
@@ -16,12 +17,19 @@ RUN npm run build            # emits /fe/dist (SPA + PWA artifacts)
 
 # ---- stage 2: python runtime ----
 FROM python:3.12-slim
-# Non-root fixed UID so the mounted /data volume has predictable ownership on the NAS.
 RUN groupadd -g 10001 app && useradd -u 10001 -g app -M -s /usr/sbin/nologin app
+
+# Microsoft ODBC Driver 18 + unixODBC — pyodbc needs these at runtime to reach
+# the SQL Server (192.168.0.20). python:3.12-slim is Debian 12 (bookworm).
+RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
+ && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+ && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list \
+ && apt-get update && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc \
+ && apt-get purge -y --auto-remove curl gnupg && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /srv
 
-# Backend deps first for layer caching (requirements.txt deliberately has no
-# pyodbc — the v2 app uses SQLite only; pyodbc lives with the legacy tooling).
+# Backend deps first for layer caching.
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -31,13 +39,13 @@ COPY --from=frontend /fe/dist ./frontend/dist
 
 ARG GIT_SHA=dev
 ENV GIT_SHA=$GIT_SHA \
-    MT_DB_PATH=/data/mileage.db \
     MT_STATIC_DIR=/srv/frontend/dist \
     PORT=8000 \
     PYTHONUNBUFFERED=1
+# The SQL Server connection string (sqlss_conn_str) is injected at RUNTIME from
+# the NAS env file — never baked in. No local DB / volume anymore.
 
-# /data is the volume mount point for the SQLite DB; make it writable by the app user.
-RUN mkdir -p /data && chown -R app:app /data /srv
+RUN chown -R app:app /srv
 USER 10001
 EXPOSE 8000
 

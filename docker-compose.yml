@@ -1,6 +1,7 @@
 # Synology Container Manager -> Project -> point at this file (or `docker compose up -d`).
-# The image carries only code; the SQLite DB lives on the mounted volume below and
-# survives every Watchtower auto-update. See docs/DEPLOY_SYNOLOGY.md.
+# The image carries only code; data lives in the SQL Server (192.168.0.20). The
+# connection string is injected at runtime from mileage-tracker.env (git-ignored,
+# created on the NAS). See docs/DEPLOY_SYNOLOGY.md.
 services:
   mileage-tracker:
     image: ghcr.io/brspencer90/mileage-tracker:latest
@@ -8,14 +9,8 @@ services:
     restart: unless-stopped
     ports:
       - "8088:8000"            # NAS host port : container port (change 8088 if it clashes)
-    volumes:
-      - ./data:/data          # SQLite DB persists here ({{NAS_STACK_DIR}}/data/mileage.db)
-    environment:
-      - MT_DB_PATH=/data/mileage.db
-      - MT_STATIC_DIR=/srv/frontend/dist
-    # No runtime secrets today (SQLite, no external APIs). When one arrives (e.g. an
-    # EIA key for MT-14), add it via a git-ignored env file created on the NAS:
-    #   env_file: [ mileage-tracker.env ]
+    env_file:
+      - mileage-tracker.env    # holds sqlss_conn_str=...  (git-ignored; created on the NAS)
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
     healthcheck:
