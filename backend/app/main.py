@@ -1,8 +1,13 @@
 """App factory: routers, health check, migration-at-startup, static serving."""
 
+import os
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Build stamp: CI passes the commit SHA as a build-arg -> env var; "dev" locally.
+# Lets you confirm which image is actually live after a deploy (docs/DEPLOY_SYNOLOGY.md).
+GIT_SHA = os.environ.get("GIT_SHA", "dev")
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
@@ -30,8 +35,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def health(conn: sqlite3.Connection = Depends(get_db)):
+        # SELECT 1 makes the healthcheck verify the DB dependency, not just "up".
         conn.execute("SELECT 1").fetchone()
-        return {"status": "ok"}
+        return {"status": "ok", "version": GIT_SHA}
+
+    @app.get("/api/version")
+    def version():
+        return {"version": GIT_SHA}
 
     # /api routers are registered before the SPA catch-all, so they always win.
     app.include_router(vehicles.router)

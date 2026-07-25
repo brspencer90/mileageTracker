@@ -1,0 +1,35 @@
+# Synology Container Manager -> Project -> point at this file (or `docker compose up -d`).
+# The image carries only code; the SQLite DB lives on the mounted volume below and
+# survives every Watchtower auto-update. See docs/DEPLOY_SYNOLOGY.md.
+services:
+  mileage-tracker:
+    image: ghcr.io/brspencer90/mileage-tracker:latest
+    container_name: mileage-tracker
+    restart: unless-stopped
+    ports:
+      - "8088:8000"            # NAS host port : container port (change 8088 if it clashes)
+    volumes:
+      - ./data:/data          # SQLite DB persists here ({{NAS_STACK_DIR}}/data/mileage.db)
+    environment:
+      - MT_DB_PATH=/data/mileage.db
+      - MT_STATIC_DIR=/srv/frontend/dist
+    # No runtime secrets today (SQLite, no external APIs). When one arrives (e.g. an
+    # EIA key for MT-14), add it via a git-ignored env file created on the NAS:
+    #   env_file: [ mileage-tracker.env ]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 12s
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: mileage-tracker-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json:ro   # registry auth if the image is private (§5.1 of the playbook)
+    command: --label-enable --cleanup --interval 300

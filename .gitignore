@@ -1,6 +1,8 @@
 venv
 .venv/
 .env*
+*.env
+.env_mileage/
 private.json
 token.json
 *.csv

@@ -32,6 +32,16 @@ function App() {
   // Shared summary — powers the header odometer, SummaryTiles, and the
   // HistoryTable "vs avg" baseline. Null while loading or on error.
   const [summary, setSummary] = useState<SummaryStats | null>(null)
+  // Build stamp (the running image's commit SHA) so you can confirm which
+  // deploy is live. "dev" locally; the short git SHA in CI-built images.
+  const [version, setVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/version')
+      .then((r) => r.json())
+      .then((d: { version?: string }) => setVersion(d.version ?? null))
+      .catch(() => setVersion(null))
+  }, [])
 
   useEffect(() => {
     getVehicles()
@@ -154,7 +164,22 @@ function App() {
         </div>
       )}
 
-      <main className="app-main">{content}</main>
+      <main className="app-main">
+        {content}
+        {version !== null && (
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: '0.62rem',
+              color: 'var(--muted)',
+              opacity: 0.7,
+              padding: '10px 0 2px',
+            }}
+          >
+            ver. {version === 'dev' ? 'dev' : version.slice(0, 7)}
+          </div>
+        )}
+      </main>
 
       <nav className="tab-bar" aria-label="Main">
         <button

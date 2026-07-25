@@ -15,7 +15,15 @@ def seed_basic(conn, tank_size_gal=13.0):
 def test_health(client):
     resp = client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert "version" in body  # build stamp (GIT_SHA; "dev" outside CI)
+
+
+def test_version(client):
+    resp = client.get("/api/version")
+    assert resp.status_code == 200
+    assert "version" in resp.json()
 
 
 def test_vehicles_list(conn, client):

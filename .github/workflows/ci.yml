@@ -1,0 +1,51 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  validate:                    # this job name is the required-check "context" for branch protection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- backend: pytest ---
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Backend deps
+        working-directory: backend
+        run: |
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Backend tests
+        working-directory: backend
+        run: python -m pytest -q
+
+      # --- frontend: typecheck, lint, build ---
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend typecheck + lint + build
+        working-directory: frontend
+        run: |
+          npx tsc -b --force
+          npm run lint
+          npm run build
+
+      # --- the image must build (but is never pushed on a PR) ---
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

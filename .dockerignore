@@ -1,0 +1,31 @@
+# Keep the build context small and — critically — keep personal data and
+# secrets OUT of the image (it goes to a registry; treat it as readable).
+.git
+.github
+docs
+legacy
+scripts
+
+# personal data / local DB — NEVER bake these in (served from a volume instead)
+data
+*.db
+*.db-wal
+*.db-shm
+*.xlsx
+*.csv
+
+# secrets
+**/.env
+*.env
+
+# build artifacts / deps — regenerated in the build stages
+backend/.venv
+.env_mileage
+**/__pycache__
+**/.pytest_cache
+frontend/node_modules
+frontend/dist
+frontend/dev-dist
+
+# misc
+**/.DS_Store

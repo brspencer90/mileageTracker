@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Mileage tracker v2" — a self-hosted fuel/fill-up tracker (single user, multi-vehicle-ready). FastAPI + SQLite backend serving a Vite + React + TypeScript PWA, designed for sub-30-second fill-up logging from a phone. Target deployment is a Synology DS220+ (no Docker) reached via Tailscale; local development runs everything on the dev machine.
+"Mileage tracker v2" — a self-hosted fuel/fill-up tracker (single user, multi-vehicle-ready). FastAPI + SQLite backend serving a Vite + React + TypeScript PWA, designed for sub-30-second fill-up logging from a phone. Target deployment is a Synology DS220+ via **Docker + CI/CD** (build-and-pull: GitHub Actions → GHCR → Watchtower auto-pulls on the NAS), reached from the phone via Tailscale. Local development runs everything on the dev machine.
 
-Product backlog and decisions: `docs/PRODUCT_PLAN.md`. Build plan: `docs/IMPLEMENTATION_PLAN.md`. NAS deployment (not yet done): planned as `docs/DEPLOY_SYNOLOGY.md`.
+Product backlog and decisions: `docs/PRODUCT_PLAN.md`. Build plan: `docs/IMPLEMENTATION_PLAN.md`. **NAS/Docker deployment: `docs/DEPLOY_SYNOLOGY.md`** (Dockerfile + docker-compose.yml at repo root; `.github/workflows/` ci.yml + deploy.yml). The SQLite DB is NOT baked into the image — it lives on a `/data` volume so it survives auto-updates; personal data (`*.xlsx`/`*.csv`/`*.db`) is kept out of the image via `.dockerignore`. `/api/version` and the UI's `ver.` footer report the running image's `GIT_SHA`. (The earlier "no Docker, SynoCommunity Python + Task Scheduler" plan was reversed in favor of this CI/CD pipeline.)
 
 ## Commands
 
