@@ -1,9 +1,10 @@
 """App factory: routers, health check, migration-at-startup, static serving."""
 
 import os
-import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+import pyodbc
 
 # Build stamp: CI passes the commit SHA as a build-arg -> env var; "dev" locally.
 # Lets you confirm which image is actually live after a deploy (docs/DEPLOY_SYNOLOGY.md).
@@ -14,27 +15,28 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .db import connect, get_db, run_migrations
+from .db import connect, get_db, run_schema
 from .routers import fillups, stats, vehicles
 
 
 def create_app() -> FastAPI:
     settings = Settings()
+    conn_str = settings.pyodbc_conn_str()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        conn = connect(settings.db_path)
+        conn = connect(conn_str)
         try:
-            run_migrations(conn)
+            run_schema(conn)
         finally:
             conn.close()
         yield
 
     app = FastAPI(title="Mileage Tracker", lifespan=lifespan)
-    app.state.db_path = settings.db_path
+    app.state.conn_str = conn_str
 
     @app.get("/api/health")
-    def health(conn: sqlite3.Connection = Depends(get_db)):
+    def health(conn: pyodbc.Connection = Depends(get_db)):
         # SELECT 1 makes the healthcheck verify the DB dependency, not just "up".
         conn.execute("SELECT 1").fetchone()
         return {"status": "ok", "version": GIT_SHA}

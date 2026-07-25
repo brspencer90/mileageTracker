@@ -1,4 +1,5 @@
-"""All SQL lives here, plus the partial-fill-aware MPG derivation (MT-9).
+"""All SQL lives here (T-SQL for Microsoft SQL Server, pyodbc `?` params), plus
+the partial-fill-aware MPG derivation (MT-9).
 
 MPF/MPG are derived at read time, never stored (editing/deleting a row would
 otherwise corrupt its neighbor's stored values). The ordering axis is mileage
@@ -13,7 +14,6 @@ now a single O(n) Python pass in `_derive`.
 """
 
 import datetime
-import sqlite3
 
 _FILLUP_COLUMNS = (
     "vehicle_id",
@@ -28,6 +28,30 @@ _FILLUP_COLUMNS = (
 )
 
 
+# --- pyodbc row helpers -----------------------------------------------------
+
+
+def _norm(value):
+    """DATE/DATETIME2 come back as date/datetime objects; the Python derivation
+    and callers expect ISO strings (as SQLite returned). Normalize on read."""
+    if isinstance(value, datetime.date):  # also matches datetime.datetime
+        return value.isoformat()
+    return value
+
+
+def _rows(cursor) -> list[dict]:
+    cols = [c[0] for c in cursor.description]
+    return [dict(zip(cols, (_norm(v) for v in row))) for row in cursor.fetchall()]
+
+
+def _one(cursor) -> dict | None:
+    cols = [c[0] for c in cursor.description]
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    return dict(zip(cols, (_norm(v) for v in row)))
+
+
 # --- MT-9 derivation --------------------------------------------------------
 
 
@@ -40,7 +64,7 @@ def _median(values: list[float]) -> float | None:
     return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
 
 
-def _derive(rows: list[sqlite3.Row]) -> list[dict]:
+def _derive(rows: list[dict]) -> list[dict]:
     """Partial-fill-aware MPG derivation over one vehicle's real fills.
 
     `rows` must be that vehicle's fills with mileage NOT NULL, ordered by mileage
@@ -99,7 +123,7 @@ def _derive(rows: list[sqlite3.Row]) -> list[dict]:
     return out
 
 
-def _augment_pending(row: sqlite3.Row) -> dict:
+def _augment_pending(row: dict) -> dict:
     """A pending row (mileage NULL) carries no derivation."""
     d = dict(row)
     d["mpf"] = None
@@ -109,41 +133,45 @@ def _augment_pending(row: sqlite3.Row) -> dict:
     return d
 
 
-def _real_rows(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
-    return conn.execute(
+def _real_rows(conn, vehicle_id: int) -> list[dict]:
+    cur = conn.cursor()
+    cur.execute(
         "SELECT * FROM fillups WHERE vehicle_id = ? AND mileage IS NOT NULL"
         " ORDER BY mileage ASC, id ASC",
-        (vehicle_id,),
-    ).fetchall()
+        vehicle_id,
+    )
+    return _rows(cur)
 
 
-def _pending_rows(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
-    return conn.execute(
+def _pending_rows(conn, vehicle_id: int) -> list[dict]:
+    cur = conn.cursor()
+    cur.execute(
         "SELECT * FROM fillups WHERE vehicle_id = ? AND mileage IS NULL"
-        " ORDER BY date DESC, id DESC",
-        (vehicle_id,),
-    ).fetchall()
+        " ORDER BY [date] DESC, id DESC",
+        vehicle_id,
+    )
+    return _rows(cur)
 
 
 # --- vehicles ---------------------------------------------------------------
 
 
-def list_vehicles(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM vehicles ORDER BY id").fetchall()
+def list_vehicles(conn) -> list[dict]:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM vehicles ORDER BY id")
+    return _rows(cur)
 
 
-def get_vehicle(conn: sqlite3.Connection, vehicle_id: int) -> sqlite3.Row | None:
-    return conn.execute(
-        "SELECT * FROM vehicles WHERE id = ?", (vehicle_id,)
-    ).fetchone()
+def get_vehicle(conn, vehicle_id: int) -> dict | None:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM vehicles WHERE id = ?", vehicle_id)
+    return _one(cur)
 
 
 # --- fillups ----------------------------------------------------------------
 
 
-def list_fillups(
-    conn: sqlite3.Connection, vehicle_id: int, limit: int, offset: int
-) -> list[dict]:
+def list_fillups(conn, vehicle_id: int, limit: int, offset: int) -> list[dict]:
     # Pending rows first (newest date first), then real rows by mileage DESC.
     pending = [_augment_pending(r) for r in _pending_rows(conn, vehicle_id)]
     real_desc = list(reversed(_derive(_real_rows(conn, vehicle_id))))
@@ -151,95 +179,100 @@ def list_fillups(
     return combined[offset : offset + limit]
 
 
-def count_fillups(conn: sqlite3.Connection, vehicle_id: int) -> int:
-    return conn.execute(
-        "SELECT COUNT(*) FROM fillups WHERE vehicle_id = ?", (vehicle_id,)
-    ).fetchone()[0]
+def count_fillups(conn, vehicle_id: int) -> int:
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM fillups WHERE vehicle_id = ?", vehicle_id)
+    return cur.fetchone()[0]
 
 
-def get_fillup(conn: sqlite3.Connection, fillup_id: int) -> dict | None:
+def get_fillup(conn, fillup_id: int) -> dict | None:
     """Fetch one fillup with derived mpf/mpg (derivation runs over its vehicle).
 
     Returns pending rows (mileage NULL) too, with null mpf/mpg/mpg_estimated.
     """
-    raw = conn.execute(
-        "SELECT vehicle_id, mileage FROM fillups WHERE id = ?", (fillup_id,)
-    ).fetchone()
+    cur = conn.cursor()
+    cur.execute("SELECT vehicle_id, mileage FROM fillups WHERE id = ?", fillup_id)
+    raw = cur.fetchone()
     if raw is None:
         return None
-    if raw["mileage"] is None:
-        pending = conn.execute(
-            "SELECT * FROM fillups WHERE id = ?", (fillup_id,)
-        ).fetchone()
-        return _augment_pending(pending)
-    for row in _derive(_real_rows(conn, raw["vehicle_id"])):
+    vehicle_id, mileage = raw[0], raw[1]
+    if mileage is None:
+        cur.execute("SELECT * FROM fillups WHERE id = ?", fillup_id)
+        return _augment_pending(_one(cur))
+    for row in _derive(_real_rows(conn, vehicle_id)):
         if row["id"] == fillup_id:
             return row
     return None
 
 
-def get_fillup_raw(conn: sqlite3.Connection, fillup_id: int) -> sqlite3.Row | None:
-    return conn.execute(
-        "SELECT * FROM fillups WHERE id = ?", (fillup_id,)
-    ).fetchone()
+def get_fillup_raw(conn, fillup_id: int) -> dict | None:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM fillups WHERE id = ?", fillup_id)
+    return _one(cur)
 
 
-def max_mileage(conn: sqlite3.Connection, vehicle_id: int) -> int | None:
-    return conn.execute(
-        "SELECT MAX(mileage) FROM fillups WHERE vehicle_id = ?", (vehicle_id,)
-    ).fetchone()[0]
+def max_mileage(conn, vehicle_id: int) -> int | None:
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(mileage) FROM fillups WHERE vehicle_id = ?", vehicle_id)
+    return cur.fetchone()[0]
 
 
 def neighbor_mileages(
-    conn: sqlite3.Connection, vehicle_id: int, exclude_id: int, mileage: int
+    conn, vehicle_id: int, exclude_id: int, mileage: int
 ) -> tuple[int | None, int | None]:
     """Mileages of the rows immediately below and above `mileage`, excluding the row itself."""
-    prev = conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         "SELECT MAX(mileage) FROM fillups WHERE vehicle_id = ? AND id != ? AND mileage < ?",
-        (vehicle_id, exclude_id, mileage),
-    ).fetchone()[0]
-    nxt = conn.execute(
+        vehicle_id, exclude_id, mileage,
+    )
+    prev = cur.fetchone()[0]
+    cur.execute(
         "SELECT MIN(mileage) FROM fillups WHERE vehicle_id = ? AND id != ? AND mileage > ?",
-        (vehicle_id, exclude_id, mileage),
-    ).fetchone()[0]
+        vehicle_id, exclude_id, mileage,
+    )
+    nxt = cur.fetchone()[0]
     return prev, nxt
 
 
 def date_neighbor_mileages(
-    conn: sqlite3.Connection, vehicle_id: int, target_date: str
+    conn, vehicle_id: int, target_date: str
 ) -> tuple[int | None, int | None]:
     """Mileages of the nearest REAL fills strictly before/after `target_date`.
 
     Pending rows (mileage NULL) are ignored. Used to bracket-validate a
     resolved backfill value (MT-24).
     """
-    prev = conn.execute(
-        "SELECT mileage FROM fillups WHERE vehicle_id = ? AND mileage IS NOT NULL"
-        " AND date < ? ORDER BY date DESC, id DESC LIMIT 1",
-        (vehicle_id, target_date),
-    ).fetchone()
-    nxt = conn.execute(
-        "SELECT mileage FROM fillups WHERE vehicle_id = ? AND mileage IS NOT NULL"
-        " AND date > ? ORDER BY date ASC, id ASC LIMIT 1",
-        (vehicle_id, target_date),
-    ).fetchone()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT TOP 1 mileage FROM fillups WHERE vehicle_id = ? AND mileage IS NOT NULL"
+        " AND [date] < ? ORDER BY [date] DESC, id DESC",
+        vehicle_id, target_date,
+    )
+    prev = cur.fetchone()
+    cur.execute(
+        "SELECT TOP 1 mileage FROM fillups WHERE vehicle_id = ? AND mileage IS NOT NULL"
+        " AND [date] > ? ORDER BY [date] ASC, id ASC",
+        vehicle_id, target_date,
+    )
+    nxt = cur.fetchone()
     return (prev[0] if prev else None, nxt[0] if nxt else None)
 
 
-def suggested_mileages(
-    conn: sqlite3.Connection, vehicle_id: int
-) -> dict[int, int]:
+def suggested_mileages(conn, vehicle_id: int) -> dict[int, int]:
     """MT-24 backfill suggestions: {fillup_id: estimated_mileage} for every
     pending (mileage NULL) row bracketed by real fills before AND after (by
     date). Reuses the importer's gallons-weighted interpolation exactly: a run
     of consecutive pending rows splits the bracket's mileage delta by weights =
     each pending row's gallons + the upper anchor's gallons.
     """
-    rows = conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         "SELECT id, mileage, gallons FROM fillups"
-        " WHERE vehicle_id = ? ORDER BY date, id",
-        (vehicle_id,),
-    ).fetchall()
+        " WHERE vehicle_id = ? ORDER BY [date], id",
+        vehicle_id,
+    )
+    rows = _rows(cur)
     out: dict[int, int] = {}
     n = len(rows)
     j = 0
@@ -270,45 +303,53 @@ def suggested_mileages(
     return out
 
 
-def insert_fillup(conn: sqlite3.Connection, data: dict) -> int:
-    cols = ", ".join(_FILLUP_COLUMNS)
-    placeholders = ", ".join(f":{c}" for c in _FILLUP_COLUMNS)
-    cur = conn.execute(
-        f"INSERT INTO fillups ({cols}) VALUES ({placeholders})", data
+def insert_fillup(conn, data: dict) -> int:
+    cols = ", ".join(f"[{c}]" for c in _FILLUP_COLUMNS)
+    placeholders = ", ".join("?" for _ in _FILLUP_COLUMNS)
+    params = tuple(data[c] for c in _FILLUP_COLUMNS)
+    cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO fillups ({cols}) OUTPUT INSERTED.id VALUES ({placeholders})",
+        params,
     )
+    new_id = cur.fetchone()[0]
     conn.commit()
-    return cur.lastrowid
+    return new_id
 
 
-def update_fillup(conn: sqlite3.Connection, fillup_id: int, fields: dict) -> None:
-    assignments = ", ".join(f"{k} = :{k}" for k in fields)
-    conn.execute(
-        f"UPDATE fillups SET {assignments} WHERE id = :id",
-        {**fields, "id": fillup_id},
-    )
+def update_fillup(conn, fillup_id: int, fields: dict) -> None:
+    assignments = ", ".join(f"[{k}] = ?" for k in fields)
+    params = tuple(fields.values()) + (fillup_id,)
+    cur = conn.cursor()
+    cur.execute(f"UPDATE fillups SET {assignments} WHERE id = ?", params)
     conn.commit()
 
 
-def delete_fillup(conn: sqlite3.Connection, fillup_id: int) -> bool:
-    cur = conn.execute("DELETE FROM fillups WHERE id = ?", (fillup_id,))
+def delete_fillup(conn, fillup_id: int) -> bool:
+    cur = conn.cursor()
+    cur.execute("DELETE FROM fillups WHERE id = ?", fillup_id)
+    rowcount = cur.rowcount
     conn.commit()
-    return cur.rowcount > 0
+    return rowcount > 0
 
 
-def fillup_context(conn: sqlite3.Connection, vehicle_id: int) -> dict:
+def fillup_context(conn, vehicle_id: int) -> dict:
     """Everything the quick-log form needs at load, in one round trip."""
-    last = conn.execute(
-        "SELECT mileage, station, zip FROM fillups"
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT TOP 1 mileage, station, zip FROM fillups"
         " WHERE vehicle_id = ? AND mileage IS NOT NULL"  # MT-24: skip pending rows
-        " ORDER BY mileage DESC LIMIT 1",
-        (vehicle_id,),
-    ).fetchone()
-    recent = conn.execute(
-        "SELECT station, zip, MAX(mileage) AS latest FROM fillups"
+        " ORDER BY mileage DESC",
+        vehicle_id,
+    )
+    last = _one(cur)
+    cur.execute(
+        "SELECT TOP 5 station, zip, MAX(mileage) AS latest FROM fillups"
         " WHERE vehicle_id = ? AND station IS NOT NULL"
-        " GROUP BY station, zip ORDER BY latest DESC LIMIT 5",
-        (vehicle_id,),
-    ).fetchall()
+        " GROUP BY station, zip ORDER BY latest DESC",
+        vehicle_id,
+    )
+    recent = _rows(cur)
     return {
         "prev_mileage": last["mileage"] if last else None,
         "last_station": last["station"] if last else None,
@@ -322,7 +363,7 @@ def fillup_context(conn: sqlite3.Connection, vehicle_id: int) -> dict:
 # --- stats ------------------------------------------------------------------
 
 
-def mpg_points(conn: sqlite3.Connection, vehicle_id: int) -> list[dict]:
+def mpg_points(conn, vehicle_id: int) -> list[dict]:
     # Derived real rows ascending; a point's mpg is None where derivation is None
     # (partials and missed-fill gaps included, so the chart line breaks there).
     return [
@@ -341,7 +382,7 @@ def mpg_points(conn: sqlite3.Connection, vehicle_id: int) -> list[dict]:
 _MPG_BAND = (15.0, 40.0)
 
 
-def summary_stats(conn: sqlite3.Connection, vehicle_id: int) -> dict:
+def summary_stats(conn, vehicle_id: int) -> dict:
     """Dashboard summary tiles for one vehicle (see models.SummaryStats).
 
     Two fetches, then windowed pieces in Python for readability:
@@ -353,11 +394,13 @@ def summary_stats(conn: sqlite3.Connection, vehicle_id: int) -> dict:
     spend/day-gaps/totals but never for MPG or cost-per-mile.
     """
     real = _derive(_real_rows(conn, vehicle_id))
-    all_rows = conn.execute(
-        "SELECT date, cost FROM fillups WHERE vehicle_id = ?"
-        " ORDER BY date ASC, id ASC",
-        (vehicle_id,),
-    ).fetchall()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT [date], cost FROM fillups WHERE vehicle_id = ?"
+        " ORDER BY [date] ASC, id ASC",
+        vehicle_id,
+    )
+    all_rows = _rows(cur)
 
     lo, hi = _MPG_BAND
 
@@ -419,17 +462,30 @@ def summary_stats(conn: sqlite3.Connection, vehicle_id: int) -> dict:
     }
 
 
-def cost_by_month(conn: sqlite3.Connection, vehicle_id: int) -> list[sqlite3.Row]:
-    return conn.execute(
-        """
-SELECT strftime('%Y-%m', date) AS month,
-       ROUND(COALESCE(SUM(cost), 0), 2) AS cost,  -- SUM skips NULL costs; COALESCE guards all-NULL months
-       ROUND(SUM(gallons), 3)  AS gallons,
-       COUNT(*)                AS fillups
-FROM fillups
-WHERE vehicle_id = :vehicle_id
-GROUP BY strftime('%Y-%m', date)
-ORDER BY month ASC
-""",
-        {"vehicle_id": vehicle_id},
-    ).fetchall()
+def cost_by_month(conn, vehicle_id: int) -> list[dict]:
+    """Monthly cost/gallons/fill counts. The month bucketing is done in Python
+    (by date.strftime('%Y-%m')) to avoid dialect-specific date-format SQL."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT [date], cost, gallons FROM fillups WHERE vehicle_id = ?"
+        " ORDER BY [date] ASC, id ASC",
+        vehicle_id,
+    )
+    rows = _rows(cur)
+    buckets: dict[str, list] = {}  # month -> [cost_sum, gallons_sum, count]
+    for r in rows:
+        month = datetime.date.fromisoformat(r["date"]).strftime("%Y-%m")
+        b = buckets.setdefault(month, [0.0, 0.0, 0])
+        if r["cost"] is not None:  # SUM skips NULL costs
+            b[0] += r["cost"]
+        b[1] += r["gallons"]
+        b[2] += 1
+    return [
+        {
+            "month": month,
+            "cost": round(b[0], 2),
+            "gallons": round(b[1], 3),
+            "fillups": b[2],
+        }
+        for month, b in sorted(buckets.items())
+    ]

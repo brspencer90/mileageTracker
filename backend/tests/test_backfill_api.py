@@ -1,61 +1,47 @@
 """MT-24: in-app mileage backfill (pending fills + gallons-weighted suggestion)."""
 
-from conftest import connect, run_migrations, seed_fillup, seed_vehicle
+import pyodbc
+import pytest
+
+from conftest import seed_fillup, seed_vehicle
 
 
-# --- migration ---------------------------------------------------------------
+# --- schema ------------------------------------------------------------------
 
 
-def test_migration_makes_mileage_nullable_and_preserves_rows(tmp_path):
-    """A v2 DB with data migrates to v3 keeping every row; mileage becomes
-    nullable while UNIQUE(vehicle_id, mileage) still allows multiple NULLs."""
-    db_path = tmp_path / "v2.db"
-    conn = connect(db_path)
-    # Build the pre-0003 schema by applying only 0001 + 0002.
-    conn.executescript(
-        "CREATE TABLE vehicles (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE,"
-        " make TEXT, model TEXT, year INTEGER, tank_size_gal REAL,"
-        " created_at TEXT NOT NULL DEFAULT (datetime('now')));"
-        "CREATE TABLE fillups (id INTEGER PRIMARY KEY,"
-        " vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),"
-        " date TEXT NOT NULL, mileage INTEGER NOT NULL CHECK (mileage > 0),"
-        " gallons REAL NOT NULL, cost REAL, station TEXT, zip TEXT,"
-        " missed_last_fill INTEGER NOT NULL DEFAULT 0,"
-        " created_at TEXT NOT NULL DEFAULT (datetime('now')),"
-        " mileage_estimated INTEGER NOT NULL DEFAULT 0, gauge_notches REAL,"
-        " UNIQUE (vehicle_id, mileage));"
-        "PRAGMA user_version = 2;"
-    )
+def test_schema_allows_multiple_null_mileages(conn):
+    """The schema (applied by the autouse fixture) makes mileage nullable while
+    the FILTERED unique index still allows MANY pending (NULL mileage) rows and
+    rejects duplicate real odometer readings."""
     vid = seed_vehicle(conn, name="Tiger")
-    # Raw inserts against the hand-built pre-migration schema (the seed_fillup
-    # helper targets the current schema, which has columns this table lacks yet).
-    conn.executemany(
-        "INSERT INTO fillups (vehicle_id, date, mileage, gallons, cost)"
-        " VALUES (?, ?, ?, 10.0, 30.0)",
-        [(vid, "2023-01-01", 1000), (vid, "2023-01-10", 1300)],
+    seed_fillup(conn, vid, 1000, date="2023-01-01")
+    seed_fillup(conn, vid, 1300, date="2023-01-10")
+
+    # Multiple NULL mileages coexist (the filtered unique index ignores them).
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO fillups (vehicle_id, [date], mileage, gallons, cost)"
+        " VALUES (?, ?, NULL, 10.0, 30.0)",
+        vid, "2023-01-15",
+    )
+    cur.execute(
+        "INSERT INTO fillups (vehicle_id, [date], mileage, gallons, cost)"
+        " VALUES (?, ?, NULL, 10.0, 30.0)",
+        vid, "2023-01-16",
     )
     conn.commit()
-    before = conn.execute("SELECT COUNT(*) FROM fillups").fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM fillups WHERE mileage IS NULL")
+    assert cur.fetchone()[0] == 2
 
-    assert run_migrations(conn) == 4  # 0003 (nullable) + 0004 (partial_fill)
-    assert conn.execute("SELECT COUNT(*) FROM fillups").fetchone()[0] == before
-
-    # mileage is now nullable and multiple NULLs coexist under the UNIQUE.
-    conn.execute(
-        "INSERT INTO fillups (vehicle_id, date, mileage, gallons, cost)"
-        " VALUES (?, ?, NULL, 10.0, 30.0)",
-        (vid, "2023-01-15"),
-    )
-    conn.execute(
-        "INSERT INTO fillups (vehicle_id, date, mileage, gallons, cost)"
-        " VALUES (?, ?, NULL, 10.0, 30.0)",
-        (vid, "2023-01-16"),
-    )
-    conn.commit()
-    assert conn.execute(
-        "SELECT COUNT(*) FROM fillups WHERE mileage IS NULL"
-    ).fetchone()[0] == 2
-    conn.close()
+    # A duplicate real (vehicle_id, mileage) is still rejected.
+    with pytest.raises(pyodbc.IntegrityError):
+        cur.execute(
+            "INSERT INTO fillups (vehicle_id, [date], mileage, gallons, cost)"
+            " VALUES (?, ?, 1300, 10.0, 30.0)",
+            vid, "2023-01-20",
+        )
+        conn.commit()
+    conn.rollback()
 
 
 # --- pending creation --------------------------------------------------------

@@ -15,7 +15,6 @@ warning when |stored - recomputed| > 0.05.
 
 import csv
 import re
-import sqlite3
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -54,39 +53,50 @@ class ImportReport:
 
 
 def import_fillups(
-    conn: sqlite3.Connection,
+    conn,
     rows: Iterable[NormalizedRow],
     dry_run: bool = False,
 ) -> ImportReport:
     """Insert normalized rows in a single transaction.
 
-    Vehicles are get-or-created by name. Inserts use INSERT OR IGNORE keyed on
-    UNIQUE(vehicle_id, mileage), so re-running the same source is naturally
-    idempotent. With dry_run=True the transaction is rolled back at the end.
+    Vehicles are get-or-created by name. Idempotency is check-then-insert on
+    (vehicle_id, mileage) — SQL Server has no INSERT OR IGNORE, and the
+    filtered unique index only covers non-NULL mileage; uncommitted inserts are
+    visible to the following SELECT on the same connection, so duplicates within
+    one batch are caught too. With dry_run=True the transaction is rolled back.
     """
     report = ImportReport()
     vehicle_ids: dict[str, int] = {}
     for row in rows:
         name = row["vehicle_name"]
         if name not in vehicle_ids:
-            existing = conn.execute(
-                "SELECT id FROM vehicles WHERE name = ?", (name,)
-            ).fetchone()
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM vehicles WHERE name = ?", name)
+            existing = cur.fetchone()
             if existing:
                 vehicle_ids[name] = existing[0]
             else:
-                cur = conn.execute(
-                    "INSERT INTO vehicles (name) VALUES (?)", (name,)
+                cur.execute(
+                    "INSERT INTO vehicles (name) OUTPUT INSERTED.id VALUES (?)", name
                 )
-                vehicle_ids[name] = cur.lastrowid
+                vehicle_ids[name] = cur.fetchone()[0]
                 report.vehicles_created += 1
-        cur = conn.execute(
-            "INSERT OR IGNORE INTO fillups"
-            " (vehicle_id, date, mileage, gallons, cost, station, zip,"
+        vid = vehicle_ids[name]
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT 1 FROM fillups WHERE vehicle_id = ? AND mileage = ?",
+            vid, row["mileage"],
+        )
+        if cur.fetchone() is not None:
+            report.skipped_existing += 1
+            continue
+        cur.execute(
+            "INSERT INTO fillups"
+            " (vehicle_id, [date], mileage, gallons, cost, station, zip,"
             "  missed_last_fill, mileage_estimated, gauge_notches)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                vehicle_ids[name],
+                vid,
                 row["date"],
                 row["mileage"],
                 row["gallons"],
@@ -98,12 +108,9 @@ def import_fillups(
                 row.get("gauge_notches"),
             ),
         )
-        if cur.rowcount:
-            report.inserted += 1
-            if row.get("mileage_estimated", False):
-                report.estimated += 1
-        else:
-            report.skipped_existing += 1
+        report.inserted += 1
+        if row.get("mileage_estimated", False):
+            report.estimated += 1
     if dry_run:
         conn.rollback()
     else:

@@ -232,12 +232,13 @@ def test_xlsx_import_and_idempotency(conn, tmp_path):
     row = conn.execute(
         "SELECT mileage_estimated, gauge_notches FROM fillups WHERE mileage = 1600"
     ).fetchone()
-    assert row["mileage_estimated"] == 0
-    assert row["gauge_notches"] == 2.5
+    # pyodbc Rows index by position/attribute, not by string key.
+    assert row.mileage_estimated == 0
+    assert row.gauge_notches == 2.5
     est = conn.execute(
         "SELECT mileage FROM fillups WHERE mileage_estimated = 1 ORDER BY mileage"
     ).fetchall()
-    assert [r["mileage"] for r in est] == [5500, 68479, 68730]
+    assert [r.mileage for r in est] == [5500, 68479, 68730]
 
     second = import_fillups(conn, rows_from_xlsx(path))
     assert second.inserted == 0

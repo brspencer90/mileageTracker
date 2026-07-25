@@ -1,54 +1,45 @@
-"""SQLite connection helper and migration runner (no ORM, no migration library)."""
+"""SQL Server (pyodbc) connection helper and schema runner (no ORM)."""
 
 import re
-import sqlite3
 from pathlib import Path
 
+import pyodbc
 from fastapi import Request
 
-MIGRATIONS_DIR = Path(__file__).parent / "migrations"
-_MIGRATION_RE = re.compile(r"^(\d{4})_.+\.sql$")
+SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 
-def connect(db_path: str | Path) -> sqlite3.Connection:
-    """Open a connection with the standard pragmas; auto-create the parent dir."""
-    path = Path(db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # check_same_thread=False: FastAPI may run a sync dependency's setup,
-    # the endpoint, and teardown on different threadpool threads. Each
-    # connection is still used by exactly one request at a time.
-    conn = sqlite3.connect(path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+def connect(conn_str: str) -> pyodbc.Connection:
+    """Open a pyodbc connection (autocommit off; callers commit explicitly)."""
+    return pyodbc.connect(conn_str, timeout=8)
 
 
-def run_migrations(conn: sqlite3.Connection) -> int:
-    """Apply migrations/000N_*.sql for N > PRAGMA user_version, in order.
+def run_schema(conn: pyodbc.Connection) -> None:
+    """Apply schema.sql (idempotent CREATE-if-not-exists) via a batch runner.
 
-    Returns the resulting schema version.
+    pyodbc runs one statement per ``execute``, so split the file into statements
+    on blank lines. Comment-only lines are dropped first so a leading comment
+    never swallows the statement that follows it.
     """
-    version = conn.execute("PRAGMA user_version").fetchone()[0]
-    for path in sorted(MIGRATIONS_DIR.iterdir()):
-        m = _MIGRATION_RE.match(path.name)
-        if not m:
-            continue
-        n = int(m.group(1))
-        if n <= version:
-            continue
-        conn.executescript(path.read_text(encoding="utf-8"))
-        conn.execute(f"PRAGMA user_version = {n}")
-        conn.commit()
-        version = n
-    return version
+    sql = SCHEMA_PATH.read_text(encoding="utf-8")
+    lines = [ln for ln in sql.splitlines() if not ln.strip().startswith("--")]
+    stmts = [s.strip() for s in re.split(r"\n\s*\n", "\n".join(lines)) if s.strip()]
+    cur = conn.cursor()
+    for stmt in stmts:
+        cur.execute(stmt)
+    conn.commit()
 
 
 def get_db(request: Request):
-    """FastAPI dependency: one connection per request."""
-    conn = connect(request.app.state.db_path)
+    """FastAPI dependency: one connection per request.
+
+    Autocommit is off; write query functions commit themselves, so the teardown
+    just closes. A commit here on clean exit is harmless and covers any writer
+    that forgot to commit.
+    """
+    conn = connect(request.app.state.conn_str)
     try:
         yield conn
+        conn.commit()
     finally:
         conn.close()
