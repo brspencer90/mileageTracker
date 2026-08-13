@@ -14,7 +14,7 @@ file is that template with the placeholders filled in for **this** project.
 | Owner / repo | `brspencer90` / `mileageTracker` |
 | Image | `ghcr.io/brspencer90/mileage-tracker` |
 | Build context | repo root (`Dockerfile` at root; needs both `backend/` and `frontend/`) |
-| Host:container port | `8088:8000` (change 8088 in `docker-compose.yml` if it clashes) |
+| Host:container port | `8124:8000` (change 8124 in `docker-compose.yml` if it clashes) |
 | NAS stack dir | `/volume1/docker/mileage-tracker` |
 | Runtime secret | `sqlss_conn_str` — the SQL Server connection string (in a git-ignored `mileage-tracker.env` on the NAS) |
 | Watchtower poll | 300s |
@@ -87,7 +87,7 @@ printf '%s' 'ghp_YOURTOKEN' | sudo docker login ghcr.io -u brspencer90 --passwor
 3. Create `mileage-tracker.env` next to it with the connection string (see the DB
    section above). No data seeding — your 205 fills are already in SQL Server.
 4. Container Manager → **Project → Create** → select the compose file → build/up.
-5. Browse `http://<nas>:8088`.
+5. Browse `http://<nas>:8124`.
 
 *(If the SQL Server itself runs on this same NAS, the container reaches it over the
 LAN IP `192.168.0.20` from the default bridge network — no special networking needed.)*
@@ -95,8 +95,8 @@ LAN IP `192.168.0.20` from the default bridge network — no special networking 
 ## Verify
 
 ```bash
-curl -s http://<nas>:8088/api/health     # {"status":"ok","version":"<sha>"}
-curl -s http://<nas>:8088/api/version     # {"version":"<sha>"}
+curl -s http://<nas>:8124/api/health     # {"status":"ok","version":"<sha>"}
+curl -s http://<nas>:8124/api/version     # {"version":"<sha>"}
 # the UI footer shows "ver. <sha7>" — confirm it matches the deployed commit
 ```
 
@@ -116,4 +116,4 @@ curl -s http://<nas>:8088/api/version     # {"version":"<sha>"}
 
 Docker changes *how the app is hosted*, not *how you reach it from the pump* — that's
 still **Tailscale** (install the Synology package, log in). Browse
-`http://<nas-tailnet-name>:8088` from the phone; no ports exposed to the internet.
+`http://<nas-tailnet-name>:8124` from the phone; no ports exposed to the internet.

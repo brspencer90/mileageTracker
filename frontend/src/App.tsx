@@ -164,22 +164,13 @@ function App() {
         </div>
       )}
 
-      <main className="app-main">
-        {content}
-        {version !== null && (
-          <div
-            style={{
-              textAlign: 'center',
-              fontSize: '0.62rem',
-              color: 'var(--muted)',
-              opacity: 0.7,
-              padding: '10px 0 2px',
-            }}
-          >
-            ver. {version === 'dev' ? 'dev' : version.slice(0, 7)}
-          </div>
-        )}
-      </main>
+      <main className="app-main">{content}</main>
+
+      {version !== null && (
+        <div className="build-stamp" aria-hidden="true">
+          ver. {version === 'dev' ? 'dev' : version.slice(0, 7)}
+        </div>
+      )}
 
       <nav className="tab-bar" aria-label="Main">
         <button

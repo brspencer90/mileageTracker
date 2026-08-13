@@ -117,6 +117,21 @@
   margin-bottom: 8px;
 }
 
+/* ---------- build/version stamp (bottom-right, above the tab bar) ---------- */
+
+.build-stamp {
+  position: fixed;
+  right: 10px;
+  bottom: calc(66px + env(safe-area-inset-bottom));
+  font-size: 0.6rem;
+  color: var(--muted);
+  opacity: 0.6;
+  z-index: 15;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
 /* ---------- bottom tab bar ---------- */
 
 .tab-bar {
