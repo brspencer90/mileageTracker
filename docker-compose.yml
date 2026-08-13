@@ -2,6 +2,11 @@
 # The image carries only code; data lives in the SQL Server (192.168.0.20). The
 # connection string is injected at runtime from mileage-tracker.env (git-ignored,
 # created on the NAS). See docs/DEPLOY_SYNOLOGY.md.
+#
+# NO Watchtower here on purpose: run ONE Watchtower per NAS. flightTracker already
+# runs one with --label-enable, so it auto-updates this container too (via the
+# enable label below; same GHCR login covers both images). Two Watchtowers fight
+# and SIGTERM each other.
 services:
   mileage-tracker:
     image: ghcr.io/brspencer90/mileage-tracker:latest
@@ -19,12 +24,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 12s
-
-  watchtower:
-    image: containrrr/watchtower:latest
-    container_name: mileage-tracker-watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.docker/config.json:/config.json:ro   # registry auth if the image is private (§5.1 of the playbook)
-    command: --label-enable --cleanup --interval 300
