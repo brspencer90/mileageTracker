@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ApiError, createFillup, getFillupContext } from '../api/client'
 import type { FillupContext, FillupCreate } from '../api/types'
-import { formatDate, todayISO } from '../lib/format'
+import { todayISO } from '../lib/format'
 import FuelGauge from './FuelGauge'
 
 interface Props {
@@ -23,7 +23,6 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
   const [station, setStation] = useState('')
   const [zip, setZip] = useState('')
   const [date, setDate] = useState(todayISO())
-  const [dateOpen, setDateOpen] = useState(false)
   const [missedLastFill, setMissedLastFill] = useState(false)
   const [partialFill, setPartialFill] = useState(false)
   const [gaugeNotches, setGaugeNotches] = useState<number | null>(null)
@@ -173,7 +172,6 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
       setGallons('')
       setCost('')
       setDate(todayISO())
-      setDateOpen(false)
       setMissedLastFill(false)
       setPartialFill(false)
       setGaugeNotches(null)
@@ -196,8 +194,19 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
         </p>
       )}
 
-      {/* Primary group: the three numbers that define a fill-up, grouped and
-          prominent so the common case is a top-of-screen, no-scroll entry. */}
+      <label className="field">
+        <span className="field-label">Date</span>
+        <input
+          type="date"
+          value={date}
+          max={todayISO()}
+          onChange={(e) => setDate(e.target.value)}
+        />
+        {dateHint !== null && <span className="field-hint">{dateHint}</span>}
+      </label>
+
+      {/* Primary group: the three numbers that define a fill-up plus the fuel
+          gauge, grouped and prominent so the common case is a no-scroll entry. */}
       <div className="primary-group card">
         {!noOdometer && (
           <label className="field">
@@ -249,6 +258,8 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
           />
           {costHint !== null && <span className="field-hint">{costHint}</span>}
         </label>
+
+        <FuelGauge value={gaugeNotches} onChange={setGaugeNotches} />
       </div>
 
       <div className="preview-line" aria-live="polite">
@@ -323,32 +334,6 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
           </div>
         )}
 
-        <div className="field">
-          {!dateOpen ? (
-            <button
-              type="button"
-              className="date-toggle"
-              onClick={() => setDateOpen(true)}
-            >
-              Date: {formatDate(date)}{' '}
-              <span className="date-change">change</span>
-            </button>
-          ) : (
-            <label className="field">
-              <span className="field-label">Date</span>
-              <input
-                type="date"
-                value={date}
-                max={todayISO()}
-                onChange={(e) => setDate(e.target.value)}
-              />
-              {dateHint !== null && (
-                <span className="field-hint">{dateHint}</span>
-              )}
-            </label>
-          )}
-        </div>
-
         <label className="check-field">
           <input
             type="checkbox"
@@ -366,8 +351,6 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
           />
           <span>Partial fill — didn&apos;t fill to full</span>
         </label>
-
-        <FuelGauge value={gaugeNotches} onChange={setGaugeNotches} />
       </div>
 
       {toast !== null && (
