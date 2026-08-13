@@ -21,11 +21,15 @@ RUN groupadd -g 10001 app && useradd -u 10001 -g app -M -s /usr/sbin/nologin app
 
 # Microsoft ODBC Driver 18 + unixODBC — pyodbc needs these at runtime to reach
 # the SQL Server (192.168.0.20). python:3.12-slim is Debian 12 (bookworm).
+# libgssapi-krb5-2 is an UNSTATED runtime dependency of the driver (it dlopen's
+# libgssapi_krb5.so.2); install it explicitly so it's marked manual and can't be
+# stripped — otherwise the driver loads as "file not found". Do NOT --auto-remove
+# after (it removed that lib and crash-looped the container the first time).
 RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
  && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
  && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/12/prod bookworm main" > /etc/apt/sources.list.d/mssql-release.list \
- && apt-get update && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc \
- && apt-get purge -y --auto-remove curl gnupg && rm -rf /var/lib/apt/lists/*
+ && apt-get update && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 unixodbc libgssapi-krb5-2 \
+ && apt-get purge -y curl gnupg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv
 
