@@ -889,3 +889,214 @@
   font-weight: 600;
   margin-top: 8px;
 }
+
+/* ---------- fuel gauge (GTI cluster), MT-20/MT-22 ----------
+   The gauge FACE is a dark instrument panel in both themes (it reads as the
+   cluster fuel bar); the surrounding chrome uses the app's theme tokens so it
+   sits correctly on a light or dark page. GTI "Tornado Red" is its own accent. */
+
+.fuel-gauge {
+  /* cluster-face palette (theme-independent) */
+  --fg-red: #e4002b; /* GTI Tornado Red */
+  --fg-red-glow: rgba(228, 0, 43, 0.55);
+  --fg-reserve: #ff8a3d; /* warm reserve/low-fuel shade near E */
+  --fg-face: #16181c;
+  --fg-face-2: #202329;
+  --fg-tick: rgba(255, 255, 255, 0.32);
+  --fg-tick-major: rgba(255, 255, 255, 0.85);
+  --fg-face-border: rgba(255, 255, 255, 0.12);
+
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.fg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.fg-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.fg-pump {
+  width: 17px;
+  height: 17px;
+  color: var(--fg-red);
+  flex: none;
+}
+
+.fg-optional {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fg-readout {
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.fg-readout b {
+  font-weight: 700;
+}
+
+.fg-readout-max {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.fg-notset {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.fg-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.fg-nudge {
+  flex: none;
+  width: 48px;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 500;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fg-nudge:active {
+  background: var(--fg-red);
+  border-color: var(--fg-red);
+  color: #fff;
+}
+
+.fg-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 11px; /* room for the thumb to overflow the face at E/F */
+}
+
+.fg-face {
+  position: relative;
+  height: 46px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, var(--fg-face-2), var(--fg-face));
+  border: 1px solid var(--fg-face-border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  touch-action: none; /* let pointer drags own the horizontal axis */
+  overflow: hidden;
+}
+
+.fg-face:focus-visible {
+  outline: 2px solid var(--fg-red);
+  outline-offset: 2px;
+}
+
+.fg-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.fg-tick {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  background: var(--fg-tick);
+}
+
+.fg-tick-major {
+  height: 16px;
+  width: 2px;
+  background: var(--fg-tick-major);
+}
+
+.fg-fill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  border-radius: 7px 3px 3px 7px;
+  box-shadow: 0 0 10px var(--fg-red-glow);
+  pointer-events: none;
+  transition: width 0.12s ease-out;
+}
+
+.fg-thumb {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 40px;
+  border-radius: 5px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5), 0 0 8px var(--fg-red-glow);
+  pointer-events: none;
+  transition: left 0.12s ease-out;
+}
+
+.fg-scale {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.fg-scale-h {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 500;
+}
+
+.fg-clear {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fg-fill,
+  .fg-thumb {
+    transition: none;
+  }
+}

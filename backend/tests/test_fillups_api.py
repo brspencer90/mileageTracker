@@ -323,6 +323,78 @@ def test_estimated_flags_propagate(conn, client):
     assert [p["estimated"] for p in points] == [False, True, True]
 
 
+def test_create_persists_gauge_notches(conn, client):
+    vehicle_id = seed_basic(conn)
+    resp = client.post(
+        "/api/fillups",
+        json={
+            "vehicle_id": vehicle_id,
+            "date": "2023-02-01",
+            "mileage": 1900,
+            "gallons": 12.0,
+            "cost": 36.0,
+            "gauge_notches": 1.0,
+        },
+    )
+    assert resp.status_code == 201
+    fillup_id = resp.json()["id"]
+    assert resp.json()["gauge_notches"] == 1.0
+    # And it survives a fresh read.
+    listing = client.get(f"/api/fillups?vehicle_id={vehicle_id}").json()
+    row = next(i for i in listing["items"] if i["id"] == fillup_id)
+    assert row["gauge_notches"] == 1.0
+
+
+def test_create_gauge_notches_defaults_null(conn, client):
+    vehicle_id = seed_basic(conn)
+    resp = client.post(
+        "/api/fillups",
+        json={
+            "vehicle_id": vehicle_id,
+            "date": "2023-02-01",
+            "mileage": 1900,
+            "gallons": 12.0,
+            "cost": 36.0,
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["gauge_notches"] is None
+
+
+def test_patch_sets_gauge_notches(conn, client):
+    vehicle_id = seed_basic(conn)
+    top_id = conn.execute(
+        "SELECT id FROM fillups WHERE vehicle_id = ? AND mileage = 1600",
+        (vehicle_id,),
+    ).fetchone()[0]
+    resp = client.patch(f"/api/fillups/{top_id}", json={"gauge_notches": 4.25})
+    assert resp.status_code == 200
+    assert resp.json()["gauge_notches"] == 4.25
+
+
+def test_gauge_notches_out_of_range_rejected(conn, client):
+    vehicle_id = seed_basic(conn)
+    resp = client.post(
+        "/api/fillups",
+        json={
+            "vehicle_id": vehicle_id,
+            "date": "2023-02-01",
+            "mileage": 1900,
+            "gallons": 12.0,
+            "cost": 36.0,
+            "gauge_notches": 9,
+        },
+    )
+    assert resp.status_code == 422  # pydantic ge/le bound
+
+    top_id = conn.execute(
+        "SELECT id FROM fillups WHERE vehicle_id = ? AND mileage = 1600",
+        (vehicle_id,),
+    ).fetchone()[0]
+    resp = client.patch(f"/api/fillups/{top_id}", json={"gauge_notches": -1})
+    assert resp.status_code == 422
+
+
 def test_context_empty_vehicle(conn, client):
     vehicle_id = seed_vehicle(conn)
     resp = client.get(f"/api/fillups/context?vehicle_id={vehicle_id}")

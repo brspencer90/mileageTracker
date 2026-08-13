@@ -23,6 +23,8 @@ export interface FillupCreate {
   missed_last_fill: boolean
   /** top-up that didn't fill the tank; its fuel rolls into the next full fill (MT-9) */
   partial_fill: boolean
+  /** fuel-gauge reading at fill-up, 0 (empty) .. 8 (full) in 0.25 steps; null when unrecorded (MT-20/MT-22) */
+  gauge_notches: number | null
 }
 
 /** PATCH semantics: all fields optional, vehicle_id excluded. */

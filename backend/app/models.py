@@ -30,6 +30,9 @@ class FillupCreate(BaseModel):
     # MT-9: a top-up that didn't fill the tank to full. It gets no MPG of its
     # own; its fuel rolls into the next full fill's window. Any gallons > 0.
     partial_fill: bool = False
+    # MT-20/MT-22: fuel-gauge reading at fill-up, in notches (0=empty .. 8=full,
+    # in 0.25 steps). Optional; omitted/null when the gauge wasn't recorded.
+    gauge_notches: float | None = Field(default=None, ge=0, le=8)
 
 
 class ResolveMileage(BaseModel):
@@ -49,6 +52,7 @@ class FillupUpdate(BaseModel):
     zip: str | None = Field(default=None, pattern=ZIP_PATTERN)
     missed_last_fill: bool | None = None
     partial_fill: bool | None = None  # MT-9
+    gauge_notches: float | None = Field(default=None, ge=0, le=8)  # MT-20/MT-22
 
 
 class FillupOut(BaseModel):

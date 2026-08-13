@@ -25,6 +25,7 @@ _FILLUP_COLUMNS = (
     "zip",
     "missed_last_fill",
     "partial_fill",
+    "gauge_notches",
 )
 
 

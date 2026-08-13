@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { ApiError, createFillup, getFillupContext } from '../api/client'
 import type { FillupContext, FillupCreate } from '../api/types'
 import { formatDate, todayISO } from '../lib/format'
+import FuelGauge from './FuelGauge'
 
 interface Props {
   vehicleId: number
@@ -25,6 +26,7 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
   const [dateOpen, setDateOpen] = useState(false)
   const [missedLastFill, setMissedLastFill] = useState(false)
   const [partialFill, setPartialFill] = useState(false)
+  const [gaugeNotches, setGaugeNotches] = useState<number | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -152,6 +154,7 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
       zip: zip === '' ? null : zip,
       missed_last_fill: missedLastFill,
       partial_fill: partialFill,
+      gauge_notches: gaugeNotches,
     }
     try {
       const saved = await createFillup(body)
@@ -173,6 +176,7 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
       setDateOpen(false)
       setMissedLastFill(false)
       setPartialFill(false)
+      setGaugeNotches(null)
       loadContext()
       onLogged()
     } catch (err: unknown) {
@@ -362,6 +366,8 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
           />
           <span>Partial fill — didn&apos;t fill to full</span>
         </label>
+
+        <FuelGauge value={gaugeNotches} onChange={setGaugeNotches} />
       </div>
 
       {toast !== null && (

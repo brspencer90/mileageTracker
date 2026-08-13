@@ -126,6 +126,7 @@ def create_fillup(payload: FillupCreate, conn: sqlite3.Connection = Depends(get_
             "zip": payload.zip,
             "missed_last_fill": 1 if payload.missed_last_fill else 0,
             "partial_fill": 1 if payload.partial_fill else 0,
+            "gauge_notches": payload.gauge_notches,
         },
     )
     return _out_with_suggestion(conn, queries.get_fillup(conn, fillup_id))

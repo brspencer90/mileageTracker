@@ -9,6 +9,7 @@ import {
 } from '../api/client'
 import type { FillupOut, FillupUpdate } from '../api/types'
 import { formatDate, formatMoney, todayISO } from '../lib/format'
+import FuelGauge from './FuelGauge'
 
 const PAGE_SIZE = 50
 const ZIP_RE = /^\d{5}$/
@@ -57,6 +58,12 @@ function changedFields(prev: FillupOut, body: FillupUpdate): string[] {
     body.partial_fill !== prev.partial_fill
   ) {
     out.push('partial-fill flag')
+  }
+  if (
+    body.gauge_notches !== undefined &&
+    body.gauge_notches !== prev.gauge_notches
+  ) {
+    out.push('fuel gauge')
   }
   return out
 }
@@ -425,6 +432,7 @@ function EditDialog({ fillup, onClose, onSaved }: EditProps) {
   const [zip, setZip] = useState(fillup.zip ?? '')
   const [missed, setMissed] = useState(fillup.missed_last_fill)
   const [partial, setPartial] = useState(fillup.partial_fill)
+  const [gauge, setGauge] = useState<number | null>(fillup.gauge_notches)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -458,6 +466,7 @@ function EditDialog({ fillup, onClose, onSaved }: EditProps) {
       zip: zip === '' ? null : zip,
       missed_last_fill: missed,
       partial_fill: partial,
+      gauge_notches: gauge,
     }
     try {
       await updateFillup(fillup.id, body)
@@ -551,6 +560,7 @@ function EditDialog({ fillup, onClose, onSaved }: EditProps) {
             />
             <span>Partial fill — didn&apos;t fill to full</span>
           </label>
+          <FuelGauge value={gauge} onChange={setGauge} />
           {error !== null && (
             <p className="inline-error" role="alert">
               {error}
