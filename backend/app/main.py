@@ -19,17 +19,32 @@ from .db import connect, get_db, run_schema
 from .routers import fillups, stats, vehicles
 
 
+def _safe_target(conn_str: str) -> str:
+    """The SERVER/DATABASE tokens from the ODBC string, for logging — never the
+    password. Confirms *what* a failing startup was pointed at."""
+    parts = [
+        p.strip() for p in conn_str.split(";")
+        if p.strip().upper().startswith(("SERVER=", "DATABASE="))
+    ]
+    return " ".join(parts) or "(no server in conn str)"
+
+
 def create_app() -> FastAPI:
     settings = Settings()
     conn_str = settings.pyodbc_conn_str()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Logged BEFORE the DB connect so a crash-loop still shows which build is
+        # running and what it tried to reach (troubleshooting: is this the new image?).
+        print(f"[mileage-tracker] startup build={GIT_SHA} -> {_safe_target(conn_str)}",
+              flush=True)
         conn = connect(conn_str)
         try:
             run_schema(conn)
         finally:
             conn.close()
+        print(f"[mileage-tracker] ready build={GIT_SHA} (schema applied)", flush=True)
         yield
 
     app = FastAPI(title="Mileage Tracker", lifespan=lifespan)
