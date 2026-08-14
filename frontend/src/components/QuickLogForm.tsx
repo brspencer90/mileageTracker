@@ -231,6 +231,15 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
           </label>
         )}
 
+        <label className="check-field">
+          <input
+            type="checkbox"
+            checked={noOdometer}
+            onChange={(e) => setNoOdometer(e.target.checked)}
+          />
+          <span>I don&apos;t have an odometer reading</span>
+        </label>
+
         <label className="field">
           <span className="field-label">Gallons</span>
           <input
@@ -260,36 +269,6 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
         </label>
 
         <FuelGauge value={gaugeNotches} onChange={setGaugeNotches} />
-      </div>
-
-      <div className="preview-line" aria-live="polite">
-        {preview ?? ' '}
-      </div>
-
-      {serverError !== null && (
-        <p className="inline-error" role="alert">
-          {serverError}
-        </p>
-      )}
-
-      <button type="submit" className="submit-btn" disabled={!canSubmit}>
-        {submitting ? 'Saving…' : 'Save fill-up'}
-      </button>
-
-      {/* Secondary "details" — visually demoted, but present without extra
-          taps: the no-odometer flag, station + quick-picks, ZIP, date, and
-          the missed-fill flag. */}
-      <div className="details-group">
-        <span className="details-label">Details</span>
-
-        <label className="check-field">
-          <input
-            type="checkbox"
-            checked={noOdometer}
-            onChange={(e) => setNoOdometer(e.target.checked)}
-          />
-          <span>I don&apos;t have an odometer reading</span>
-        </label>
 
         <label className="field">
           <span className="field-label">Station</span>
@@ -333,7 +312,26 @@ function QuickLogForm({ vehicleId, onLogged }: Props) {
             ))}
           </div>
         )}
+      </div>
 
+      <div className="preview-line" aria-live="polite">
+        {preview ?? ' '}
+      </div>
+
+      {serverError !== null && (
+        <p className="inline-error" role="alert">
+          {serverError}
+        </p>
+      )}
+
+      <button type="submit" className="submit-btn" disabled={!canSubmit}>
+        {submitting ? 'Saving…' : 'Save fill-up'}
+      </button>
+
+      {/* Secondary "details" — visually demoted, but present without extra
+          taps: the no-odometer flag, station + quick-picks, ZIP, date, and
+          the missed-fill flag. */}
+      <div className="details-group">
         <label className="check-field">
           <input
             type="checkbox"
